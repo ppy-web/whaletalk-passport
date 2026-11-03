@@ -18,6 +18,7 @@ DSH 的 AI Passport 连接器、ASR、Agent 与 TTS 继续由电脑端提供。
 - 可保留 Wi-Fi，仅修改电脑地址与配对码。
 
 支持 ESP32-C3、8 MB Flash、240×320 屏幕、ES8311、无 PSRAM 的 AI Passport。
+设备介绍与官方文档见 [AI Passport 官网](https://ai-passport.folotoy.cn/)。
 电脑需要持续运行 DSH；不包含声学回声消除、声音自动打断或独立云端后台。
 
 ## 接入
