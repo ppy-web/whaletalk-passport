@@ -6,7 +6,10 @@
 #include "online_ui.c"
 static online_status_t fixture;
 static int battery_value=87;
-static unsigned toggles,cancels,volumes,setups;
+static unsigned toggles,cancels,volumes,setups,themes;
+static unsigned idle_changes;
+static unsigned backlight=100,backlight_changes;
+void bsp_display_backlight(uint8_t percent){backlight=percent;backlight_changes++;}
 static int64_t clock_us=2200000;
 int64_t esp_timer_get_time(void){return clock_us;}
 int bsp_battery_soc(void){return battery_value;}
@@ -15,6 +18,8 @@ void online_toggle_mic(void){toggles++;}
 void online_cancel(void){cancels++;}
 void online_volume(void){volumes++;}
 void online_setup(void){setups++;}
+void online_cycle_theme(void){fixture.theme=online_theme_next(fixture.theme);themes++;}
+void online_cycle_idle(void){fixture.idle=online_idle_next(fixture.idle);idle_changes++;}
 static void check_labels(lv_obj_t *o){
     if(lv_obj_has_flag(o,LV_OBJ_FLAG_HIDDEN))return;
     if(lv_obj_check_type(o,&lv_label_class)){
@@ -61,12 +66,20 @@ int main(void) {
     online_ui_enter(true);
     const char *messages[]={"DSH-Voice-1234","正在连接后端","确定：开始对话","我在认真听","正在请教 Agent","DSH","后端消息过大或分片无效"};
     const char *names[]={"setup","connecting","ready","listening","thinking","speaking","error"};
-    for(unsigned i=0;i<7;i++){
-        fixture.phase=i;fixture.mic=i>=3 && i<=5;fixture.level=19000;
-        snprintf(fixture.message,sizeof(fixture.message),"%s",messages[i]);refresh(NULL);snap(names[i]);
+    for(unsigned theme=0;theme<2;theme++) {
+        fixture.theme=online_theme_normalize(theme);
+        for(unsigned i=0;i<7;i++){
+            fixture.phase=i;fixture.mic=i>=3 && i<=5;fixture.level=19000;
+            snprintf(fixture.message,sizeof(fixture.message),"%s",messages[i]);refresh(NULL);
+            char name[48];snprintf(name,sizeof(name),"%s-%s",theme==ONLINE_THEME_WHALE?"whale":"mint",names[i]);snap(name);
+            assert(lv_obj_has_flag(whale_layer,LV_OBJ_FLAG_HIDDEN)==(i==ONLINE_SETUP || theme!=ONLINE_THEME_WHALE));
+            assert(lv_obj_has_flag(face_layer,LV_OBJ_FLAG_HIDDEN)==(i==ONLINE_SETUP || theme!=ONLINE_THEME_MINT));
+        }
     }
+    fixture.theme=ONLINE_THEME_WHALE;fixture.phase=ONLINE_READY;fixture.mic=false;
+    clock_us=4500000;refresh(NULL);snap("whale-blink");clock_us=2200000;
     fixture.phase=ONLINE_READY;fixture.mic=false;
-    const unsigned volume_values[]={0,55,75,90,0};
+    const unsigned volume_values[]={0,25,50,75,90,100,0};
     for(unsigned i=0;i<sizeof(volume_values)/sizeof(volume_values[0]);i++) {
         fixture.volume=volume_values[i];refresh(NULL);check();
         char expected[32];
@@ -81,22 +94,75 @@ int main(void) {
     online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);refresh(NULL);assert(volumes==1);
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);assert(cancels==1);
     online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);assert(setups==0);
+    online_theme_t before=fixture.theme;
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(themes==1 && fixture.theme!=before);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(themes==2 && fixture.theme==before);
     snap("settings-empty");
     fixture.configured=true;fixture.password_set=true;fixture.token_set=true;strcpy(fixture.ssid,"Home Wi-Fi");strcpy(fixture.host,"192.168.1.10:3101");
     refresh(NULL);snap("settings");
     strcpy(fixture.ssid,"12345678901234567890123456789012");refresh(NULL);check();
+    online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
+    for(unsigned i=0;i<4;i++) {
+        online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);check();
+        assert(fixture.idle==(online_idle_t)((i+1)%4));
+        const char *states[]={"idle-3-min","idle-10-min","idle-never","idle-1-min"};
+        snap(states[i]);
+    }
+    assert(idle_changes==4 && menu.page==ONLINE_SETTINGS);
+    online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);snap("confirm");assert(setups==0);
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(setups==0 && menu.page==ONLINE_SETTINGS);
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(setups==1);
-    fixture.phase=ONLINE_LISTENING;fixture.mic=true;refresh(NULL);
+    fixture.theme=ONLINE_THEME_MINT;fixture.phase=ONLINE_LISTENING;fixture.mic=true;refresh(NULL);
     assert(!lv_obj_has_flag(ears[0],LV_OBJ_FLAG_HIDDEN));
     fixture.phase=ONLINE_SPEAKING;fixture.level=1000;refresh(NULL);check();int y=lv_obj_get_height(mouth);
     clock_us+=5000000;fixture.level=19000;refresh(NULL);check();
     assert(lv_obj_get_height(mouth)>y);
     assert(lv_obj_has_flag(ears[0],LV_OBJ_FLAG_HIDDEN));
+    /* Quiet listening may sleep without changing microphone state. */
+    menu.page=ONLINE_HOME;fixture.phase=ONLINE_LISTENING;fixture.mic=true;
+    refresh(NULL);clock_us+=60000000;refresh(NULL);
+    assert(backlight==0 && fixture.mic);
+    unsigned previous_toggles=toggles,previous_cancels=cancels,previous_volumes=volumes;
+    for(unsigned i=0;i<3;i++) {
+        bsp_btn_t key=i==0?BSP_BTN_OK:i==1?BSP_BTN_UP:BSP_BTN_DOWN;
+        online_ui_key(key,BSP_BTN_PRESS);refresh(NULL);assert(backlight==100);
+        online_ui_key(key,BSP_BTN_CLICK);refresh(NULL);
+        assert(toggles==previous_toggles && cancels==previous_cancels && volumes==previous_volumes);
+        clock_us+=60000000;refresh(NULL);assert(backlight==0);
+    }
+    online_ui_key(BSP_BTN_OK,BSP_BTN_PRESS);refresh(NULL);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);assert(menu.page==ONLINE_HOME);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_RELEASE);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_PRESS);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(toggles==previous_toggles+1);
+    clock_us+=60000000;refresh(NULL);assert(backlight==0);
+    fixture.phase=ONLINE_THINKING;refresh(NULL);assert(backlight==100);
+    clock_us+=120000000;refresh(NULL);assert(backlight==100);
+    fixture.phase=ONLINE_SPEAKING;clock_us+=120000000;refresh(NULL);assert(backlight==100);
+    fixture.phase=ONLINE_READY;refresh(NULL);clock_us+=60000000;refresh(NULL);assert(backlight==0);
+    fixture.phase=ONLINE_SETUP;refresh(NULL);assert(backlight==100);
+    clock_us+=120000000;refresh(NULL);assert(backlight==100);
+    fixture.phase=ONLINE_READY;refresh(NULL);clock_us+=60000000;refresh(NULL);assert(backlight==0);
+    unsigned transitions=backlight_changes;refresh(NULL);assert(backlight_changes==transitions);
+    /* Apply each setting to the real UI timer, including disabling an asleep screen. */
+    for(unsigned i=0;i<=ONLINE_IDLE_NEVER;i++) {
+        fixture.idle=(online_idle_t)i;
+        online_ui_key(BSP_BTN_UP,BSP_BTN_PRESS);refresh(NULL);
+        online_ui_key(BSP_BTN_UP,BSP_BTN_RELEASE);
+        assert(backlight==100);
+        uint64_t timeout=online_idle_timeout_ms(fixture.idle);
+        if(timeout) {
+            clock_us+=(timeout-1)*1000;refresh(NULL);assert(backlight==100);
+            clock_us+=1000;refresh(NULL);assert(backlight==0);
+        } else {
+            clock_us+=INT64_C(86400000000);refresh(NULL);assert(backlight==100);
+        }
+    }
     buttons_available=false;refresh(NULL);check();
-    puts("Online UI: all phases, glyphs, clipping, bounds and controls PASS");
+    assert(backlight==100);
+    puts("Online UI: both themes, phases, glyphs, clipping, bounds and controls PASS");
 }
