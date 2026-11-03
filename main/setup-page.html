@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>连接 WhaleTalk Passport</title>
+<style>
+  * { box-sizing: border-box }
+  body { font: 18px/1.65 system-ui,sans-serif; max-width: 520px; margin: 0 auto; padding: 28px 20px; background: #e9f8f3; color: #173e3a }
+  h1 { font-size: 28px; margin: 0 0 8px } p { margin: 8px 0 20px }
+  label { display: block; margin-top: 20px; font-weight: 600 }
+  input,select,button { font: inherit; width: 100%; padding: 12px; margin-top: 6px; border: 1px solid #588b80; border-radius: 10px; background: #fff; color: inherit }
+  input:focus-visible,select:focus-visible,button:focus-visible,summary:focus-visible { outline: 3px solid #24685d; outline-offset: 3px }
+  small { display: block; margin-top: 6px; color: #335f56; font-weight: 400; font-size: 16px }
+  input[type=checkbox] { width: 20px; height: 20px; margin-right: 8px; vertical-align: middle }
+  button { background: #173e3a; color: #fff; border: 0; margin-top: 24px; cursor: pointer; font-weight: 600 }
+  button:disabled { opacity: .55; cursor: wait }
+  details { margin-top: 22px } summary { cursor: pointer }
+  #s { white-space: pre-wrap } [hidden] { display: none !important }
+</style>
+<h1>连接 WhaleTalk Passport</h1>
+<p>设备热点无需密码，直接连接。先在电脑的 AI Passport 连接器中点击<strong>生成配对码并开启连接</strong>，再把显示的电脑 IP 和 4 位配对码填到这里。</p>
+<form id="f">
+  <label id="keepRow" hidden><input type="checkbox" id="keep">保留已连接的 Wi-Fi <small id="savedWifi"></small></label>
+  <div id="wifiFields">
+    <label for="wifi">设备要连接的 2.4 GHz Wi-Fi</label>
+    <select id="wifi" required><option value="">正在读取附近网络…</option></select>
+    <label id="manualRow" hidden>Wi-Fi 名称<input id="manual" maxlength="32" autocomplete="off" disabled></label>
+    <small id="scanHint">选择电脑所在的网络，或能访问这台电脑的同一局域网。</small>
+    <label for="password">Wi-Fi 密码</label>
+    <input name="password" id="password" type="password" maxlength="63" autocomplete="new-password">
+  </div>
+  <label for="ip">电脑 IP</label>
+  <input name="ip" id="ip" inputmode="decimal" placeholder="例如 192.168.1.10" maxlength="15" required>
+  <small>填写 DSH 页面显示的电脑地址。不要填 127.0.0.1、0.0.0.0 或设备自己的 IP。</small>
+  <label for="token">4 位配对码</label>
+  <input name="token" id="token" inputmode="numeric" pattern="[0-9]{4}" minlength="4" maxlength="4" placeholder="例如 1234" autocomplete="off" required>
+  <small>与电脑显示的数字一致，前面的 0 也需要填写。</small>
+  <details><summary>高级设置</summary>
+    <label for="port">连接端口</label>
+    <input name="port" id="port" type="number" min="1" max="65535" value="3101" required>
+    <small>默认 3101。只有电脑修改了端口时才需要同步修改。</small>
+  </details>
+  <button id="save" disabled>保存并连接</button>
+</form>
+<p id="s" role="status" aria-live="polite">正在读取设备配置…</p>
+<details><summary>连不上时检查什么？</summary>
+  <p>确认电脑上的连接器显示“正在监听”。电脑需要保持 DSH 运行，并允许 3101 端口通过防火墙。</p>
+  <p>保存后设备会重启并连接你选择的 Wi-Fi；手机可退出当前热点。设备显示“准备好了”后短按 OK 开麦，DOWN 取消，长按 OK 可返回设置。</p>
+</details>
+<script>
+  const f=document.getElementById('f'),wifi=document.getElementById('wifi'),manual=document.getElementById('manual'),keep=document.getElementById('keep'),s=document.getElementById('s'),save=document.getElementById('save')
+  let networks=[],nonce=''
+  function manualNetwork(){const yes=wifi.value==='manual';document.getElementById('manualRow').hidden=!yes;manual.disabled=keep.checked||!yes;manual.required=!keep.checked&&yes}
+  wifi.onchange=manualNetwork
+  keep.onchange=()=>{document.getElementById('wifiFields').hidden=keep.checked;wifi.disabled=keep.checked;wifi.required=!keep.checked;f.elements.password.disabled=keep.checked;manualNetwork()}
+  fetch('/networks').then(r=>r.json()).then(data=>{
+    networks=data.networks||[];wifi.replaceChildren(new Option('请选择 Wi-Fi',''))
+    networks.forEach((n,i)=>wifi.add(new Option(n.ssid+' · '+(n.rssi>=-60?'信号强':n.rssi>=-75?'信号中':'信号弱'),String(i))))
+    wifi.add(new Option('手动输入 / 隐藏网络','manual'))
+    if(!networks.length){wifi.value='manual';manualNetwork()}
+  }).catch(()=>{wifi.replaceChildren(new Option('手动输入 Wi-Fi','manual'));manualNetwork()})
+  fetch('/current',{cache:'no-store'}).then(r=>{if(!r.ok)throw Error();return r.json()}).then(data=>{
+    nonce=data.nonce;save.disabled=!nonce;s.textContent=''
+    if(data.configured){document.getElementById('keepRow').hidden=false;document.getElementById('savedWifi').textContent=data.ssid;keep.checked=true;keep.onchange();f.elements.ip.value=data.ip||'';f.elements.port.value=data.port||3101}
+  }).catch(()=>{s.textContent='配置读取失败，请重新打开此页。'})
+  f.onsubmit=async e=>{
+    e.preventDefault();if(!nonce)return;save.disabled=true
+    const data=Object.fromEntries(new FormData(f));data.keepWifi=keep.checked
+    if(!keep.checked)data.ssid=wifi.value==='manual'?manual.value:networks[Number(wifi.value)].ssid
+    data.ip=data.ip.trim();data.port=Number(data.port)
+    try{const r=await fetch('/save',{method:'POST',headers:{'Content-Type':'application/json','X-Setup-Nonce':nonce},body:JSON.stringify(data)});s.textContent=await r.text();if(!r.ok)save.disabled=false}
+    catch{s.textContent='连接已断开，请查看设备是否重启；未重启时重新连接热点再试。';save.disabled=false}
+  }
+</script>
+</html>

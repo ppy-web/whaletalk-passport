@@ -1,0 +1,17 @@
+WhaleTalk Passport / 鲸语通行证
+
+Application transport, expression UI, provisioning, font subsets, host preview
+and Recovery boot hook are adapted from:
+https://github.com/liutaocode/esp32demo/tree/5ae08427cbf9f7e3241267c2a8f52c907f6bdd68/examples/qwen-voice-bean
+Copyright (c) 2026 FoloToy, MIT License (see LICENSE).
+
+Board support and firmware verification/archive tools are from:
+https://gitee.com/FoloToy/ai-passport/tree/1802df55420b97f8a8da138f410bf0c1e9094961
+Copyright (c) 2026 FoloToy, MIT License (see LICENSE).
+
+Source Han Sans font subsets are licensed under SIL Open Font License 1.1.
+See assets/fonts/OFL-SourceHanSansSC.txt.
+
+ESP-IDF and Managed Components retain their own licenses in the installed
+toolchain and managed_components directories. They are downloaded during setup
+and build, and are not vendored into this source tree.

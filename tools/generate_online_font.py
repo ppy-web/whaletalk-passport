@@ -1,0 +1,33 @@
+#!/usr/bin/env python3
+"""Regenerate WhaleTalk Passport's Chinese font subsets from its UI source."""
+from pathlib import Path
+import subprocess
+import argparse
+import re
+
+ROOT = Path(__file__).resolve().parents[1]
+source = "\n".join(p.read_text(encoding="utf-8") for p in (ROOT / "main").glob("online_*.c"))
+symbols = "".join(sorted({ch for ch in source if ord(ch) > 127}))
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--check", action="store_true")
+args = parser.parse_args()
+for size in (12, 16):
+    name = f"mouthy_bean_zh_{size}"
+    output = ROOT / f"assets/fonts/{name}.c"
+    if args.check:
+        existing = {int(n, 16) for n in re.findall(r"U\+([0-9A-Fa-f]+)", output.read_text(encoding="utf-8"))}
+        missing = {ord(ch) for ch in symbols} - existing
+        if missing:
+            raise SystemExit(f"Missing {size}px glyphs: " + "".join(chr(n) for n in sorted(missing)))
+        print(f"WhaleTalk Passport {size}px font: {len(symbols)} UI characters covered")
+        continue
+    font_source = Path(__import__("os").environ.get("ONLINE_FONT_SOURCE", str(ROOT / "managed_components/lvgl__lvgl/scripts/built_in_font/SourceHanSansSC-Normal.otf")))
+    subprocess.run([
+        "npx.cmd" if __import__("os").name == "nt" else "npx", "--yes", "lv_font_conv@1.5.3",
+        "--size", str(size), "--bpp", "2", "--format", "lvgl",
+        "--font", str(font_source),
+        "--symbols", symbols, "--range", "0x20-0x7e", "--no-compress", "--no-kerning",
+        "--lv-include", "lvgl.h", "--lv-font-name", name,
+        "--lv-fallback", "lv_font_montserrat_14", "-o", str(output),
+    ], check=True)
+    output.write_text(output.read_text(encoding="utf-8").replace(str(font_source), "<font-source>").replace(str(ROOT), "<repo>"), encoding="utf-8")

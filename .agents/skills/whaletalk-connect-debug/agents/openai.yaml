@@ -1,0 +1,4 @@
+interface:
+  display_name: "WhaleTalk 连接与排错"
+  short_description: "连接 AI Passport 与 DSH，采集日志并定位热点、会话和语音播放问题"
+  default_prompt: "使用 $whaletalk-connect-debug 连接设备与 DSH，依据日志定位故障并验证结果。"
