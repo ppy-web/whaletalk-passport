@@ -7,6 +7,7 @@ set(CONFIG_LV_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(CONFIG_LV_USE_THORVG_INTERNAL OFF CACHE BOOL "" FORCE)
 add_subdirectory("${REPO_ROOT}/managed_components/lvgl__lvgl" lvgl)
 add_executable(preview preview.c "${REPO_ROOT}/main/online_state.c"
+    "${REPO_ROOT}/assets/characters/whale_avatar.c"
     "${REPO_ROOT}/assets/fonts/mouthy_bean_zh_12.c" "${REPO_ROOT}/assets/fonts/mouthy_bean_zh_16.c")
 target_include_directories(preview PRIVATE "stubs" "${REPO_ROOT}/main")
 target_compile_options(preview PRIVATE -Wall -Wextra -Werror)

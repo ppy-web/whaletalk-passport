@@ -1,4 +1,4 @@
-WhaleTalk Passport / 鲸语通行证
+WhaleTalk Passport / 鲸语
 
 Application transport, expression UI, provisioning, font subsets, host preview
 and Recovery boot hook are adapted from:
@@ -15,3 +15,8 @@ See assets/fonts/OFL-SourceHanSansSC.txt.
 ESP-IDF and Managed Components retain their own licenses in the installed
 toolchain and managed_components directories. They are downloaded during setup
 and build, and are not vendored into this source tree.
+
+Whale Girl character reference was supplied from the companion plugin's
+assets/whale-girl-front.png. The expression atlas was generated with built-in
+imagegen using that reference. See docs/whale-girl-assets.md for provenance,
+the generation prompt and deterministic device-format conversion.

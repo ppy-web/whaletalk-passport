@@ -93,6 +93,41 @@ bool online_endpoint_from_ip_port(const char *ip,unsigned port,char *out,size_t 
     return n>0 && (size_t)n<size;
 }
 
+online_theme_t online_theme_normalize(unsigned stored) {
+    return stored==ONLINE_THEME_MINT?ONLINE_THEME_MINT:ONLINE_THEME_WHALE;
+}
+unsigned online_volume_next(unsigned current) {
+    static const unsigned steps[]={0,25,50,75,90,100};
+    for(unsigned i=0;i<sizeof(steps)/sizeof(steps[0]);i++)if(steps[i]>current)return steps[i];
+    return 0;
+}
+online_idle_t online_idle_normalize(unsigned stored) {
+    return stored<=ONLINE_IDLE_NEVER?(online_idle_t)stored:ONLINE_IDLE_1_MIN;
+}
+online_idle_t online_idle_next(online_idle_t current) {
+    return (online_idle_t)((online_idle_normalize(current)+1)%4);
+}
+uint64_t online_idle_timeout_ms(online_idle_t setting) {
+    static const uint64_t values[]={60000,180000,600000,0};
+    return values[online_idle_normalize(setting)];
+}
+bool online_screen_step(online_screen_t *screen,uint64_t now_ms,bool activity,bool keep_awake,uint64_t timeout_ms) {
+    if(!screen->initialized || activity || keep_awake || !timeout_ms) {
+        screen->initialized=true;screen->activity_ms=now_ms;screen->asleep=false;
+    } else if(now_ms-screen->activity_ms>=timeout_ms)screen->asleep=true;
+    return screen->asleep;
+}
+online_theme_t online_theme_next(online_theme_t theme) {
+    return theme==ONLINE_THEME_WHALE?ONLINE_THEME_MINT:ONLINE_THEME_WHALE;
+}
+online_avatar_t online_avatar_frame(online_phase_t phase,bool mic,unsigned level,uint64_t now_ms) {
+    if(phase==ONLINE_ERROR)return ONLINE_AVATAR_ERROR;
+    if(phase==ONLINE_THINKING)return ONLINE_AVATAR_THINKING;
+    if(phase==ONLINE_SPEAKING)return level>1800 && (now_ms/160)%2?ONLINE_AVATAR_SPEAKING:ONLINE_AVATAR_IDLE;
+    if(mic && (phase==ONLINE_LISTENING || phase==ONLINE_READY))return ONLINE_AVATAR_LISTENING;
+    return now_ms%4500<120?ONLINE_AVATAR_BLINK:ONLINE_AVATAR_IDLE;
+}
+
 online_action_t online_menu_key(online_menu_t *m,online_key_t key) {
     if(key==ONLINE_KEY_LONG) {
         m->page=m->page==ONLINE_HOME?ONLINE_SETTINGS:ONLINE_HOME;m->selected=0;
@@ -102,13 +137,18 @@ online_action_t online_menu_key(online_menu_t *m,online_key_t key) {
         if(key==ONLINE_KEY_OK)return ONLINE_ACTION_MIC;
         if(key==ONLINE_KEY_UP)return ONLINE_ACTION_VOLUME;
         if(key==ONLINE_KEY_DOWN)return ONLINE_ACTION_CANCEL;
-    } else if(key==ONLINE_KEY_UP || key==ONLINE_KEY_DOWN)m->selected^=1;
+    } else if(key==ONLINE_KEY_UP || key==ONLINE_KEY_DOWN) {
+        unsigned count=m->page==ONLINE_SETTINGS?4:2;
+        m->selected=(m->selected+(key==ONLINE_KEY_DOWN?1:count-1))%count;
+    }
     else if(key==ONLINE_KEY_OK) {
         if(m->page==ONLINE_SETTINGS) {
-            m->page=m->selected?ONLINE_CONFIRM:ONLINE_HOME;m->selected=0;
+            if(!m->selected)return ONLINE_ACTION_THEME;
+            if(m->selected==1)return ONLINE_ACTION_IDLE;
+            m->page=m->selected==3?ONLINE_CONFIRM:ONLINE_HOME;m->selected=0;
         } else if(m->selected) {
             m->page=ONLINE_HOME;m->selected=0;return ONLINE_ACTION_SETUP;
-        } else {m->page=ONLINE_SETTINGS;m->selected=1;}
+        } else {m->page=ONLINE_SETTINGS;m->selected=3;}
     }
     return ONLINE_ACTION_NONE;
 }

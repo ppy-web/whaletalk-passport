@@ -1,5 +1,6 @@
 #include "online_runtime.h"
 #include "online_setup.h"
+#include "online_theme.h"
 #include "bsp_audio.h"
 #include "esp_websocket_client.h"
 #include "esp_crt_bundle.h"
@@ -36,6 +37,11 @@ static portMUX_TYPE state_lock=portMUX_INITIALIZER_UNLOCKED;
 static online_status_t status={.phase=ONLINE_CONNECTING,.volume=75};
 static atomic_bool mic,ready,connected,got_ip,hello_pending,cancel_pending,setup_pending,volume_pending,fault;
 static atomic_uint epoch,level,volume=75,capture_drops;
+static atomic_uint selected_theme=ONLINE_THEME_WHALE,theme_revision;
+static atomic_bool theme_save_failed;
+static atomic_bool theme_storage_available;
+static atomic_uint selected_idle=ONLINE_IDLE_1_MIN,idle_revision;
+static atomic_bool idle_save_failed;
 static atomic_bool suppress_audio;
 static esp_websocket_client_handle_t gateway_socket;
 static char *frame;
@@ -58,11 +64,43 @@ static void state(online_phase_t p,const char *message) {
 void online_snapshot(online_status_t *out) {
     portENTER_CRITICAL(&state_lock);*out=status;portEXIT_CRITICAL(&state_lock);
     out->mic=atomic_load(&mic);out->volume=atomic_load(&volume);out->level=atomic_load(&level);
+    out->theme=online_theme_normalize(atomic_load(&selected_theme));out->theme_save_failed=atomic_load(&theme_save_failed);
+    out->idle=online_idle_normalize(atomic_load(&selected_idle));out->idle_save_failed=atomic_load(&idle_save_failed);
 }
 void online_toggle_mic(void) { if(audio_available) {atomic_store(&mic,!atomic_load(&mic));atomic_fetch_add(&epoch,1);if(!atomic_load(&mic))online_cancel();} }
 void online_cancel(void) { atomic_store(&suppress_audio,true); atomic_fetch_add(&epoch,1); atomic_store(&cancel_pending,true); }
 void online_volume(void) { atomic_store(&volume_pending,true); }
 void online_setup(void) { atomic_store(&setup_pending,true); }
+void online_cycle_theme(void) {
+    unsigned current=atomic_load(&selected_theme);
+    while(!atomic_compare_exchange_weak(&selected_theme,&current,online_theme_next(online_theme_normalize(current)))) {}
+    atomic_store(&theme_save_failed,!atomic_load(&theme_storage_available));atomic_fetch_add(&theme_revision,1);
+}
+void online_cycle_idle(void) {
+    unsigned current=atomic_load(&selected_idle);
+    while(!atomic_compare_exchange_weak(&selected_idle,&current,online_idle_next(online_idle_normalize(current)))) {}
+    atomic_store(&idle_save_failed,!atomic_load(&theme_storage_available));atomic_fetch_add(&idle_revision,1);
+}
+static void theme_task(void *arg) {
+    (void)arg;unsigned saved_revision=0,saved_idle_revision=0;
+    for(;;) {
+        unsigned revision=atomic_load(&theme_revision),idle_changed=atomic_load(&idle_revision);
+        online_status_t snapshot;online_snapshot(&snapshot);
+        if(revision!=saved_revision && snapshot.phase!=ONLINE_SPEAKING && snapshot.phase!=ONLINE_THINKING) {
+            bool saved=online_theme_save(snapshot.theme);
+            atomic_store(&theme_save_failed,!saved);
+            if(!saved)ESP_LOGW("whale_theme","theme persistence failed");
+            saved_revision=revision;
+        }
+        if(idle_changed!=saved_idle_revision && snapshot.phase!=ONLINE_SPEAKING && snapshot.phase!=ONLINE_THINKING) {
+            bool saved=online_idle_save(snapshot.idle);
+            atomic_store(&idle_save_failed,!saved);
+            if(!saved)ESP_LOGW("whale_theme","idle preference persistence failed");
+            saved_idle_revision=idle_changed;
+        }
+        vTaskDelay(pdMS_TO_TICKS(150));
+    }
+}
 static void fail(const char *why) {
     ESP_LOGE("bean_network","%s",why);
     atomic_store(&ready,false);atomic_store(&mic,false);atomic_store(&fault,true);
@@ -362,6 +400,11 @@ static void network_task(void *arg) {
     if(nvs_flash_init()!=ESP_OK || esp_netif_init()!=ESP_OK || esp_event_loop_create_default()!=ESP_OK) {
         state(ONLINE_ERROR,"系统初始化失败");vTaskDelete(NULL);return;
     }
+    atomic_store(&selected_theme,online_theme_load());
+    atomic_store(&selected_idle,online_idle_load());
+    bool theme_worker=xTaskCreate(theme_task,"whale_theme",3072,NULL,2,NULL)==pdPASS;
+    atomic_store(&theme_storage_available,theme_worker);atomic_store(&theme_save_failed,!theme_worker);
+    atomic_store(&idle_save_failed,!theme_worker);
     if(!online_load_config(&config)) {
         state(ONLINE_CONNECTING,"正在扫描附近 Wi-Fi");
         char info[128];esp_err_t e=online_start_setup(info,sizeof(info));state(e==ESP_OK?ONLINE_SETUP:ONLINE_ERROR,e==ESP_OK?info:"配网启动失败");
@@ -410,7 +453,7 @@ static void network_task(void *arg) {
             if(e==ESP_OK){e=nvs_set_u8(n,"setup",1);if(e==ESP_OK)e=nvs_commit(n);nvs_close(n);}
             if(e==ESP_OK)esp_restart();else state(ONLINE_ERROR,"无法进入配置，请重试");
         }
-        if(atomic_exchange(&volume_pending,false))atomic_store(&volume,atomic_load(&volume)>=90?0:atomic_load(&volume)==0?55:atomic_load(&volume)==55?75:90);
+        if(atomic_exchange(&volume_pending,false))atomic_store(&volume,online_volume_next(atomic_load(&volume)));
         bool has_ip=atomic_load(&got_ip);
         if(!started) {
             bool was_waiting=time_wait.active;

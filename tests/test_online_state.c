@@ -20,6 +20,40 @@ static void test_time_wait(void) {
     assert(online_time_step(&w,true,true,UINT64_C(5000000000))==ONLINE_TIME_START);
     assert(online_time_step(&w,true,true,UINT64_C(5000010000))==ONLINE_TIME_RETRY);
 }
+static void test_screen_idle(void) {
+    const uint64_t timeouts[]={60000,180000,600000};
+    for(unsigned i=0;i<3;i++) {
+        uint64_t timeout=online_idle_timeout_ms((online_idle_t)i);
+        assert(timeout==timeouts[i]);
+        online_screen_t screen={0};
+        assert(!online_screen_step(&screen,5000,false,false,timeout));
+        assert(!online_screen_step(&screen,5000+timeout-1,false,false,timeout));
+        assert(online_screen_step(&screen,5000+timeout,false,false,timeout));
+        uint64_t wake=5000+timeout+1;
+        assert(!online_screen_step(&screen,wake,true,false,timeout));
+        assert(!online_screen_step(&screen,wake+timeout-1,false,false,timeout));
+        assert(online_screen_step(&screen,wake+timeout,false,false,timeout));
+        assert(!online_screen_step(&screen,wake+timeout+1,false,true,timeout));
+        assert(!online_screen_step(&screen,wake+timeout*3,false,true,timeout));
+        assert(online_screen_step(&screen,wake+timeout*4,false,false,timeout));
+        /* Uptime over 32 bits must not shorten the selected duration. */
+        uint64_t late=UINT64_C(5000000000);
+        assert(!online_screen_step(&screen,late,true,false,timeout));
+        assert(online_screen_step(&screen,late+timeout,false,false,timeout));
+        assert(!online_screen_step(&screen,late+timeout+1,false,false,0));
+        assert(!online_screen_step(&screen,late+timeout*100,false,false,0));
+    }
+    const online_idle_t choices[]={ONLINE_IDLE_1_MIN,ONLINE_IDLE_3_MIN,ONLINE_IDLE_10_MIN,ONLINE_IDLE_NEVER,ONLINE_IDLE_1_MIN};
+    for(unsigned i=0;i<4;i++)assert(online_idle_next(choices[i])==choices[i+1]);
+    assert(online_idle_timeout_ms(ONLINE_IDLE_NEVER)==0);
+    assert(online_idle_normalize(255)==ONLINE_IDLE_1_MIN);
+}
+static void test_volume_steps(void) {
+    const unsigned values[]={0,25,50,75,90,100,0};
+    for(unsigned i=0;i+1<sizeof(values)/sizeof(values[0]);i++)assert(online_volume_next(values[i])==values[i+1]);
+    assert(online_volume_next(55)==75);
+    assert(online_volume_next(101)==0);
+}
 int main(void) {
     assert(online_session_compatible("7.0.0",true,true));
     assert(!online_session_compatible("6.0.0",true,true));
@@ -28,6 +62,7 @@ int main(void) {
     assert(!online_session_compatible("7.0.0",true,false));
     assert(!strstr(online_error_text("private-provider-key"),"private-provider-key"));
     test_time_wait();
+    test_screen_idle();test_volume_steps();
     assert(!online_playback_prefill_wait(0,0));
     assert(online_playback_prefill_wait(1,0));
     assert(online_playback_prefill_wait(23,349));
@@ -86,6 +121,17 @@ int main(void) {
     online_menu_t menu={0};
     assert(online_menu_key(&menu,ONLINE_KEY_LONG)==ONLINE_ACTION_NONE);
     assert(menu.page==ONLINE_SETTINGS && menu.selected==0);
+    assert(online_menu_key(&menu,ONLINE_KEY_OK)==ONLINE_ACTION_THEME);
+    assert(menu.page==ONLINE_SETTINGS);
+    online_menu_key(&menu,ONLINE_KEY_DOWN);
+    assert(online_menu_key(&menu,ONLINE_KEY_OK)==ONLINE_ACTION_IDLE);
+    assert(menu.page==ONLINE_SETTINGS && menu.selected==1);
+    online_menu_key(&menu,ONLINE_KEY_DOWN);
+    assert(online_menu_key(&menu,ONLINE_KEY_OK)==ONLINE_ACTION_NONE);
+    assert(menu.page==ONLINE_HOME);
+    online_menu_key(&menu,ONLINE_KEY_LONG);
+    online_menu_key(&menu,ONLINE_KEY_DOWN);
+    online_menu_key(&menu,ONLINE_KEY_DOWN);
     online_menu_key(&menu,ONLINE_KEY_DOWN);
     assert(online_menu_key(&menu,ONLINE_KEY_OK)==ONLINE_ACTION_NONE);
     assert(menu.page==ONLINE_CONFIRM && menu.selected==0);
@@ -95,8 +141,17 @@ int main(void) {
     online_menu_key(&menu,ONLINE_KEY_DOWN);
     assert(online_menu_key(&menu,ONLINE_KEY_OK)==ONLINE_ACTION_SETUP);
     assert(menu.page==ONLINE_HOME);
-    online_menu_key(&menu,ONLINE_KEY_LONG);online_menu_key(&menu,ONLINE_KEY_DOWN);
+    online_menu_key(&menu,ONLINE_KEY_LONG);online_menu_key(&menu,ONLINE_KEY_UP);
     online_menu_key(&menu,ONLINE_KEY_OK);online_menu_key(&menu,ONLINE_KEY_LONG);
     assert(menu.page==ONLINE_HOME);
-    puts("Online configuration and frame bounds: PASS");
+    assert(online_theme_normalize(255)==ONLINE_THEME_WHALE);
+    assert(online_theme_normalize(ONLINE_THEME_MINT)==ONLINE_THEME_MINT);
+    assert(online_theme_next(online_theme_next(ONLINE_THEME_WHALE))==ONLINE_THEME_WHALE);
+    for(unsigned phase=0;phase<=ONLINE_ERROR;phase++)for(unsigned mic=0;mic<2;mic++) {
+        for(uint64_t now=0;now<10000;now+=137) {
+            online_avatar_t frame=online_avatar_frame((online_phase_t)phase,mic!=0,65535,now);
+            assert(frame>=ONLINE_AVATAR_IDLE && frame<ONLINE_AVATAR_COUNT);
+        }
+    }
+    puts("Online configuration, theme navigation and frame bounds: PASS");
 }

@@ -1,6 +1,6 @@
 English · [简体中文](guide.zh_CN.md)
 
-# WhaleTalk Passport
+# 鲸语 · WhaleTalk Passport
 
 AI Passport becomes a voice terminal for the local DSH instance:
 microphone → Wi-Fi → plugin Passport adapter → Host ASR → dedicated Agent
@@ -11,7 +11,8 @@ required. The computer must keep DSH running.
 
 ESP32-C3, 8 MB Flash, no PSRAM, 240×320 screen, ES8311 audio and three buttons.
 The app uses the official BSP and adapts Qwen Voice Bean's expressive face and
-conversation flow. It boots directly into a mint voice companion, with setup,
+conversation flow. Its on-device name is 鲸语. It defaults to Whale Girl, with
+the original mint face available as a second appearance. Both share setup,
 connection, ready, listening, thinking, speaking, error, settings and confirmed
 reconfiguration screens. Main labels and states use 16px fonts and the provisioning address uses 20px. Chinese labels use compiled font subsets; arbitrary
 model-response transcripts are not displayed.
@@ -19,15 +20,34 @@ model-response transcripts are not displayed.
 | Button | Home action |
 | --- | --- |
 | Short OK | Toggle microphone; initially closed |
-| Short UP | Cycle volume, including mute |
+| Short UP | Cycle 0, 25, 50, 75, 90, 100%; 0 mutes |
 | Short DOWN | Cancel recognition, generation or playback |
 | Hold OK | Open settings; hold again to return home |
+
+In settings, select the second row (息屏) and briefly press OK to cycle through
+1 minute, 3 minutes, 10 minutes and Never. Changes apply immediately and are
+saved across restarts; the default is 1 minute. A failed save is shown in
+settings; cycle again to retry. Saving is deferred while thinking or speaking.
+After the selected idle period, the backlight and face animation turn off.
+Never keeps the screen on.
+Networking and an enabled microphone continue working. The first button gesture
+only wakes the screen; press again for its normal action. Thinking or speaking
+automatically wakes the screen and keeps it on, restarting the idle countdown.
+Provisioning and unavailable buttons keep the screen on for access and diagnosis.
+This is backlight sleep rather than device deep sleep. Networking and capture
+still use power; battery-life improvement needs measurement on hardware.
 
 In settings, UP/DOWN select and OK confirms. Reconfiguration needs confirmation;
 cancelling keeps existing settings. Audio uploads only after the user enables
 the microphone, pauses during recognition/thinking/playback, and resumes after
 speaker completion is acknowledged. No automatic voice interruption or acoustic
 echo cancellation is provided. Handle tool approvals in DSH.
+
+Hold OK, select the first settings row (界面), and briefly press OK to switch
+between Whale Girl and the mint face. Hold OK again to return home. The choice
+survives restart without changing Wi-Fi, pairing or the conversation. Saving is
+deferred during speech/thinking, and a failed save is shown in settings. Whale
+Girl has six expression frames; see [asset provenance and build details](whale-girl-assets.md).
 
 ## Development and builds
 

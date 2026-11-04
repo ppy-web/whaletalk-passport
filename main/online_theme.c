@@ -1,0 +1,42 @@
+#include "online_theme.h"
+#include "nvs.h"
+
+online_idle_t online_idle_load(void) {
+    nvs_handle_t handle;
+    uint8_t value=ONLINE_IDLE_1_MIN;
+    if(nvs_open("dsh_voice",NVS_READONLY,&handle)==ESP_OK) {
+        if(nvs_get_u8(handle,"idle",&value)!=ESP_OK)value=ONLINE_IDLE_1_MIN;
+        nvs_close(handle);
+    }
+    return online_idle_normalize(value);
+}
+
+bool online_idle_save(online_idle_t setting) {
+    if((unsigned)setting>ONLINE_IDLE_NEVER)return false;
+    nvs_handle_t handle;
+    if(nvs_open("dsh_voice",NVS_READWRITE,&handle)!=ESP_OK)return false;
+    esp_err_t result=nvs_set_u8(handle,"idle",(uint8_t)setting);
+    if(result==ESP_OK)result=nvs_commit(handle);
+    nvs_close(handle);
+    return result==ESP_OK;
+}
+
+online_theme_t online_theme_load(void) {
+    nvs_handle_t handle;
+    uint8_t value=ONLINE_THEME_WHALE;
+    if(nvs_open("dsh_voice",NVS_READONLY,&handle)==ESP_OK) {
+        if(nvs_get_u8(handle,"theme",&value)!=ESP_OK)value=ONLINE_THEME_WHALE;
+        nvs_close(handle);
+    }
+    return online_theme_normalize(value);
+}
+
+bool online_theme_save(online_theme_t theme) {
+    if(theme!=ONLINE_THEME_WHALE && theme!=ONLINE_THEME_MINT)return false;
+    nvs_handle_t handle;
+    if(nvs_open("dsh_voice",NVS_READWRITE,&handle)!=ESP_OK)return false;
+    esp_err_t result=nvs_set_u8(handle,"theme",(uint8_t)theme);
+    if(result==ESP_OK)result=nvs_commit(handle);
+    nvs_close(handle);
+    return result==ESP_OK;
+}
