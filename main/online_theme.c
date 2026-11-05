@@ -1,6 +1,23 @@
 #include "online_theme.h"
 #include "nvs.h"
 
+unsigned online_brightness_load(void) {
+    nvs_handle_t handle;uint8_t value=100;
+    if(nvs_open("dsh_voice",NVS_READONLY,&handle)==ESP_OK) {
+        if(nvs_get_u8(handle,"brightness",&value)!=ESP_OK)value=100;
+        nvs_close(handle);
+    }
+    return online_brightness_normalize(value);
+}
+bool online_brightness_save(unsigned percent) {
+    if(percent!=online_brightness_normalize(percent))return false;
+    nvs_handle_t handle;
+    if(nvs_open("dsh_voice",NVS_READWRITE,&handle)!=ESP_OK)return false;
+    esp_err_t result=nvs_set_u8(handle,"brightness",(uint8_t)percent);
+    if(result==ESP_OK)result=nvs_commit(handle);
+    nvs_close(handle);return result==ESP_OK;
+}
+
 online_idle_t online_idle_load(void) {
     nvs_handle_t handle;
     uint8_t value=ONLINE_IDLE_1_MIN;

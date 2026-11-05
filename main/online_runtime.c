@@ -1,6 +1,7 @@
 #include "online_runtime.h"
 #include "online_setup.h"
 #include "online_theme.h"
+#include "online_background.h"
 #include "bsp_audio.h"
 #include "esp_websocket_client.h"
 #include "esp_crt_bundle.h"
@@ -42,6 +43,10 @@ static atomic_bool theme_save_failed;
 static atomic_bool theme_storage_available;
 static atomic_uint selected_idle=ONLINE_IDLE_1_MIN,idle_revision;
 static atomic_bool idle_save_failed;
+static atomic_uint selected_background=ONLINE_BACKGROUND_DAY,background_revision;
+static atomic_bool background_save_failed;
+static atomic_uint selected_brightness=100,brightness_revision;
+static atomic_bool brightness_save_failed;
 static atomic_bool suppress_audio;
 static esp_websocket_client_handle_t gateway_socket;
 static char *frame;
@@ -64,8 +69,15 @@ static void state(online_phase_t p,const char *message) {
 void online_snapshot(online_status_t *out) {
     portENTER_CRITICAL(&state_lock);*out=status;portEXIT_CRITICAL(&state_lock);
     out->mic=atomic_load(&mic);out->volume=atomic_load(&volume);out->level=atomic_load(&level);
+    out->linked=atomic_load(&connected) && atomic_load(&ready);
+    out->audio_ok=audio_available;
     out->theme=online_theme_normalize(atomic_load(&selected_theme));out->theme_save_failed=atomic_load(&theme_save_failed);
     out->idle=online_idle_normalize(atomic_load(&selected_idle));out->idle_save_failed=atomic_load(&idle_save_failed);
+    out->background=online_background_normalize(atomic_load(&selected_background));
+    out->custom_background=online_background_custom_available();
+    out->background_save_failed=atomic_load(&background_save_failed);
+    out->brightness=online_brightness_normalize(atomic_load(&selected_brightness));
+    out->brightness_save_failed=atomic_load(&brightness_save_failed);
 }
 void online_toggle_mic(void) { if(audio_available) {atomic_store(&mic,!atomic_load(&mic));atomic_fetch_add(&epoch,1);if(!atomic_load(&mic))online_cancel();} }
 void online_cancel(void) { atomic_store(&suppress_audio,true); atomic_fetch_add(&epoch,1); atomic_store(&cancel_pending,true); }
@@ -81,10 +93,24 @@ void online_cycle_idle(void) {
     while(!atomic_compare_exchange_weak(&selected_idle,&current,online_idle_next(online_idle_normalize(current)))) {}
     atomic_store(&idle_save_failed,!atomic_load(&theme_storage_available));atomic_fetch_add(&idle_revision,1);
 }
+void online_cycle_background(void) {
+    unsigned current=atomic_load(&selected_background);
+    while(!atomic_compare_exchange_weak(&selected_background,&current,
+        online_background_next((online_background_t)current,online_background_custom_available()))) {}
+    atomic_store(&background_save_failed,!atomic_load(&theme_storage_available));
+    atomic_fetch_add(&background_revision,1);
+}
+void online_cycle_brightness(void) {
+    unsigned current=atomic_load(&selected_brightness);
+    while(!atomic_compare_exchange_weak(&selected_brightness,&current,online_brightness_next(current))) {}
+    atomic_store(&brightness_save_failed,!atomic_load(&theme_storage_available));
+    atomic_fetch_add(&brightness_revision,1);
+}
 static void theme_task(void *arg) {
-    (void)arg;unsigned saved_revision=0,saved_idle_revision=0;
+    (void)arg;unsigned saved_revision=0,saved_idle_revision=0,saved_background_revision=0,saved_brightness_revision=0;
     for(;;) {
-        unsigned revision=atomic_load(&theme_revision),idle_changed=atomic_load(&idle_revision);
+        unsigned revision=atomic_load(&theme_revision),idle_changed=atomic_load(&idle_revision),
+            background_changed=atomic_load(&background_revision),brightness_changed=atomic_load(&brightness_revision);
         online_status_t snapshot;online_snapshot(&snapshot);
         if(revision!=saved_revision && snapshot.phase!=ONLINE_SPEAKING && snapshot.phase!=ONLINE_THINKING) {
             bool saved=online_theme_save(snapshot.theme);
@@ -97,6 +123,18 @@ static void theme_task(void *arg) {
             atomic_store(&idle_save_failed,!saved);
             if(!saved)ESP_LOGW("whale_theme","idle preference persistence failed");
             saved_idle_revision=idle_changed;
+        }
+        if(background_changed!=saved_background_revision && snapshot.phase!=ONLINE_SPEAKING && snapshot.phase!=ONLINE_THINKING) {
+            bool ok=online_background_save(snapshot.background);
+            atomic_store(&background_save_failed,!ok);
+            if(!ok)ESP_LOGW("whale_theme","background preference persistence failed");
+            saved_background_revision=background_changed;
+        }
+        if(brightness_changed!=saved_brightness_revision && snapshot.phase!=ONLINE_SPEAKING && snapshot.phase!=ONLINE_THINKING) {
+            bool ok=online_brightness_save(snapshot.brightness);
+            atomic_store(&brightness_save_failed,!ok);
+            if(!ok)ESP_LOGW("whale_theme","brightness preference persistence failed");
+            saved_brightness_revision=brightness_changed;
         }
         vTaskDelay(pdMS_TO_TICKS(150));
     }
@@ -402,6 +440,14 @@ static void network_task(void *arg) {
     }
     atomic_store(&selected_theme,online_theme_load());
     atomic_store(&selected_idle,online_idle_load());
+    atomic_store(&selected_brightness,online_brightness_load());
+    online_background_init();
+    online_background_t background=online_background_load();
+    if(background==ONLINE_BACKGROUND_CUSTOM && !online_background_custom_available()) {
+        background=ONLINE_BACKGROUND_DAY;
+        ESP_LOGW("whale_theme","custom background unavailable; using built-in background");
+    }
+    atomic_store(&selected_background,background);
     bool theme_worker=xTaskCreate(theme_task,"whale_theme",3072,NULL,2,NULL)==pdPASS;
     atomic_store(&theme_storage_available,theme_worker);atomic_store(&theme_save_failed,!theme_worker);
     atomic_store(&idle_save_failed,!theme_worker);

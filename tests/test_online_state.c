@@ -124,15 +124,21 @@ int main(void) {
     assert(online_menu_key(&menu,ONLINE_KEY_OK)==ONLINE_ACTION_THEME);
     assert(menu.page==ONLINE_SETTINGS);
     online_menu_key(&menu,ONLINE_KEY_DOWN);
-    assert(online_menu_key(&menu,ONLINE_KEY_OK)==ONLINE_ACTION_IDLE);
-    assert(menu.page==ONLINE_SETTINGS && menu.selected==1);
+    assert(online_menu_key(&menu,ONLINE_KEY_OK)==ONLINE_ACTION_BACKGROUND);
     online_menu_key(&menu,ONLINE_KEY_DOWN);
+    assert(online_menu_key(&menu,ONLINE_KEY_OK)==ONLINE_ACTION_BRIGHTNESS);
+    online_menu_key(&menu,ONLINE_KEY_DOWN);
+    assert(online_menu_key(&menu,ONLINE_KEY_OK)==ONLINE_ACTION_IDLE);
+    assert(menu.page==ONLINE_SETTINGS && menu.selected==ONLINE_MENU_IDLE);
+    online_menu_key(&menu,ONLINE_KEY_DOWN);
+    assert(online_menu_key(&menu,ONLINE_KEY_OK)==ONLINE_ACTION_SETUP);
+    assert(menu.page==ONLINE_HOME);
+    online_menu_key(&menu,ONLINE_KEY_LONG);
+    for(unsigned i=0;i<ONLINE_MENU_HOME;i++)online_menu_key(&menu,ONLINE_KEY_DOWN);
     assert(online_menu_key(&menu,ONLINE_KEY_OK)==ONLINE_ACTION_NONE);
     assert(menu.page==ONLINE_HOME);
     online_menu_key(&menu,ONLINE_KEY_LONG);
-    online_menu_key(&menu,ONLINE_KEY_DOWN);
-    online_menu_key(&menu,ONLINE_KEY_DOWN);
-    online_menu_key(&menu,ONLINE_KEY_DOWN);
+    for(unsigned i=0;i<ONLINE_MENU_SETUP;i++)online_menu_key(&menu,ONLINE_KEY_DOWN);
     assert(online_menu_key(&menu,ONLINE_KEY_OK)==ONLINE_ACTION_NONE);
     assert(menu.page==ONLINE_CONFIRM && menu.selected==0);
     assert(online_menu_key(&menu,ONLINE_KEY_OK)==ONLINE_ACTION_NONE);
@@ -147,6 +153,27 @@ int main(void) {
     assert(online_theme_normalize(255)==ONLINE_THEME_WHALE);
     assert(online_theme_normalize(ONLINE_THEME_MINT)==ONLINE_THEME_MINT);
     assert(online_theme_next(online_theme_next(ONLINE_THEME_WHALE))==ONLINE_THEME_WHALE);
+    assert(online_background_normalize(255)==ONLINE_BACKGROUND_DAY);
+    assert(online_background_next(ONLINE_BACKGROUND_DAY,false)==ONLINE_BACKGROUND_NIGHT);
+    assert(online_background_next(ONLINE_BACKGROUND_NIGHT,false)==ONLINE_BACKGROUND_DAY);
+    assert(online_background_next(ONLINE_BACKGROUND_NIGHT,true)==ONLINE_BACKGROUND_CUSTOM);
+    assert(online_background_next(ONLINE_BACKGROUND_CUSTOM,true)==ONLINE_BACKGROUND_DAY);
+    const unsigned brightness_levels[]={25,50,75,100};
+    for(unsigned i=0;i<4;i++) {
+        assert(online_brightness_normalize(brightness_levels[i])==brightness_levels[i]);
+        assert(online_brightness_next(brightness_levels[i])==brightness_levels[(i+1)%4]);
+    }
+    assert(online_brightness_normalize(0)==100 && online_brightness_normalize(255)==100);
+    bool expressions[ONLINE_AVATAR_COUNT]={0};
+    unsigned changes=0;online_avatar_t previous=ONLINE_AVATAR_THINKING;
+    for(uint64_t now=0;now<60000;now+=50) {
+        online_avatar_t frame=online_avatar_frame(ONLINE_THINKING,true,0,now);
+        expressions[frame]=true;if(frame!=previous)changes++;previous=frame;
+        assert(frame!=ONLINE_AVATAR_SPEAKING && frame!=ONLINE_AVATAR_ERROR);
+        assert(frame==online_avatar_frame(ONLINE_THINKING,true,0,now+3200));
+    }
+    assert(expressions[ONLINE_AVATAR_THINKING] && expressions[ONLINE_AVATAR_BLINK] && expressions[ONLINE_AVATAR_LISTENING]);
+    assert(changes>20 && changes<100);
     for(unsigned phase=0;phase<=ONLINE_ERROR;phase++)for(unsigned mic=0;mic<2;mic++) {
         for(uint64_t now=0;now<10000;now+=137) {
             online_avatar_t frame=online_avatar_frame((online_phase_t)phase,mic!=0,65535,now);

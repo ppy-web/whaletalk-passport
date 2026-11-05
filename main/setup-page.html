@@ -2,36 +2,103 @@
 <html lang="zh-CN">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
 <title>连接鲸语</title>
 <style>
-  * { box-sizing: border-box }
-  body { font: 18px/1.65 system-ui,sans-serif; max-width: 520px; margin: 0 auto; padding: 28px 20px; background: #e9f8f3; color: #173e3a }
-  h1 { font-size: 28px; margin: 0 0 8px } p { margin: 8px 0 20px }
-  label { display: block; margin-top: 20px; font-weight: 600 }
-  input,select,button { font: inherit; width: 100%; padding: 12px; margin-top: 6px; border: 1px solid #588b80; border-radius: 10px; background: #fff; color: inherit }
-  input:focus-visible,select:focus-visible,button:focus-visible,summary:focus-visible { outline: 3px solid #24685d; outline-offset: 3px }
-  small { display: block; margin-top: 6px; color: #335f56; font-weight: 400; font-size: 16px }
-  input[type=checkbox] { width: 20px; height: 20px; margin-right: 8px; vertical-align: middle }
-  button { background: #173e3a; color: #fff; border: 0; margin-top: 24px; cursor: pointer; font-weight: 600 }
-  button:disabled { opacity: .55; cursor: wait }
-  details { margin-top: 22px } summary { cursor: pointer }
-  #s { white-space: pre-wrap } [hidden] { display: none !important }
+  :root { --ground:#f2f5f4; --surface:#fff; --raised:#f6f8f7; --text:#202c28; --muted:#53635c; --accent:#206651; --hover:#164b3b; --border:#e2e7e4; --control:#b9c5be; --disabled:#e4eae6; --radius:8px; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif; color:var(--text); background:var(--ground); color-scheme:light }
+  * { box-sizing:border-box }
+  body { margin:0; padding:40px 24px; font-size:15px; line-height:1.65; -webkit-text-size-adjust:100%; caret-color:var(--accent); scrollbar-color:var(--control) var(--ground) }
+  ::selection { color:var(--surface); background:var(--accent) }
+  /* 920px sheet = 2 × 400px form columns + 40px gap + 2 × 40px padding. */
+  main { max-width:920px; margin:auto; background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:36px 40px }
+  header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:24px }
+  h1 { margin:0; font-size:28px; line-height:1.3; font-weight:650; letter-spacing:-.025em }
+  .product { font-size:13px; color:var(--muted) }
+  .page-tabs { display:flex; gap:28px; margin-bottom:24px; border-bottom:1px solid var(--border) }
+  .page-tabs a { display:flex; align-items:center; min-height:48px; padding:0 2px; margin-bottom:-1px; border-bottom:2px solid transparent; color:var(--muted); font-size:15px; text-decoration:none }
+  .page-tabs a:hover { color:var(--text) }
+  .page-tabs a[aria-current=page] { color:var(--accent); border-bottom-color:var(--accent); font-weight:600 }
+  .intro { display:grid; grid-template-columns:1fr 1fr; gap:40px; padding:20px 24px; margin-bottom:28px; background:var(--raised); border-radius:var(--radius) }
+  .intro p { margin:0; font-size:14px; color:var(--muted) }
+  .intro strong { color:var(--text); font-weight:600 }
+  .intro-title { display:block; margin-bottom:4px; font-size:15px; color:var(--text); font-weight:600 }
+  .form-sections { display:grid; grid-template-columns:1fr 1fr; gap:40px; align-items:start }
+  fieldset { min-width:0; border:0; margin:0; padding:0 }
+  legend { padding:0; margin-bottom:16px; font-size:17px; font-weight:650 }
+  label { display:block; margin-top:18px; font-size:14px; font-weight:600 }
+  .first-label { margin-top:0 }
+  input,select,button { font:inherit; border-radius:var(--radius) }
+  input,select { display:block; width:100%; min-height:46px; margin-top:8px; padding:10px 12px; border:1px solid var(--control); background:var(--surface); color:var(--text); font-size:16px; font-variant-numeric:tabular-nums; transition:border-color .15s }
+  input::placeholder { color:var(--muted); opacity:1 }
+  input:hover,select:hover { border-color:var(--muted) }
+  input:focus-visible,select:focus-visible,button:focus-visible,summary:focus-visible,a:focus-visible { outline:2px solid var(--accent); outline-offset:3px }
+  small { display:block; margin-top:8px; color:var(--muted); font-weight:400; font-size:13px; line-height:1.65 }
+  input[type=checkbox] { display:inline-block; width:18px; min-height:18px; height:18px; margin:0 8px 0 0; vertical-align:middle; accent-color:var(--accent) }
+  #keepRow { margin:0 0 20px; padding:12px 14px; background:var(--raised); border-radius:var(--radius) }
+  #savedWifi { margin-left:26px; overflow-wrap:anywhere }
+  button { min-height:44px; padding:10px 16px; border:0; cursor:pointer; font-weight:600; transition:background .15s,color .15s }
+  button:active:not(:disabled) { transform:translateY(1px) }
+  button:disabled { background:var(--disabled); color:var(--muted); cursor:not-allowed }
+  #refresh { display:flex; gap:7px; align-items:center; margin-top:12px; padding:8px 0; background:transparent; color:var(--accent); font-size:13px; min-height:44px }
+  #refresh:hover:not(:disabled) { color:var(--hover); text-decoration:underline; text-underline-offset:4px }
+  #refresh:disabled { color:var(--muted) }
+  #scanHint { margin-top:0 }
+  details { margin-top:20px }
+  summary { display:flex; align-items:center; justify-content:space-between; min-height:44px; cursor:pointer; list-style:none; color:var(--muted); font-size:14px }
+  summary::-webkit-details-marker { display:none }
+  summary::after { content:"+"; font-size:20px; font-weight:400 }
+  details[open]>summary::after { content:"−" }
+  details[open]>summary { color:var(--text) }
+  #save { width:100%; background:var(--accent); color:var(--surface) }
+  #save:hover:not(:disabled) { background:var(--hover) }
+  #save:disabled { background:var(--disabled); color:var(--muted) }
+  .submit-area { margin-top:28px; padding-top:24px; border-top:1px solid var(--border) }
+  .after-save { margin:10px 0 0; text-align:center; color:var(--muted); font-size:13px }
+  #s { white-space:pre-wrap; font-size:14px; margin:14px 0 0; color:var(--muted) }
+  #s:empty { display:none }
+  .help { border-top:1px solid var(--border); margin-top:24px; padding-top:8px }
+  .help p { font-size:13px; color:var(--muted); margin:8px 0 }
+  [hidden] { display:none !important }
+  @media(max-width:680px) {
+    body { padding:0; background:var(--surface) }
+    main { border:0; border-radius:0; padding:28px 20px 32px }
+    header { margin-bottom:20px }
+    h1 { font-size:26px }
+    .intro { grid-template-columns:1fr; gap:12px; padding:16px; margin-bottom:24px }
+    .form-sections { grid-template-columns:1fr; gap:28px }
+    .submit-area { margin-top:24px }
+  }
+  @media(prefers-reduced-motion:reduce) { *,*::before,*::after { transition:none !important } }
 </style>
-<h1>连接鲸语</h1>
-<p>设备热点无需密码，直接连接。先在电脑的 AI Passport 连接器中点击<strong>生成配对码并开启连接</strong>，再把显示的电脑 IP 和 4 位配对码填到这里。</p>
+<main>
+<header><h1>鲸语设置</h1><span class="product">AI Passport</span></header>
+<nav class="page-tabs" aria-label="设置页面">
+  <a href="/" aria-current="page">连接鲸语</a>
+  <a href="/appearance">自定义背景</a>
+</nav>
+<div class="intro">
+  <p><span class="intro-title">先准备好电脑端</span>在电脑的 DSH 插件（dsh-xiaomi-tts）中找到 AI Passport 连接器组件，在连接器中点击<strong>生成配对码并开启连接</strong>。</p>
+  <p><span class="intro-title">再连接你的设备</span>设备热点无需密码，直接连接。在下方选择 Wi-Fi，填写连接器显示的电脑 IP 和 4 位配对码。</p>
+</div>
 <form id="f">
+  <div class="form-sections">
+  <fieldset><legend>设备网络</legend>
   <label id="keepRow" hidden><input type="checkbox" id="keep">保留已连接的 Wi-Fi <small id="savedWifi"></small></label>
   <div id="wifiFields">
-    <label for="wifi">设备要连接的 2.4 GHz Wi-Fi</label>
-    <select id="wifi" required><option value="">正在读取附近网络…</option></select>
+    <label for="wifi" class="first-label">2.4 GHz Wi-Fi</label>
+    <select id="wifi" aria-describedby="wifiHelp scanHint" required><option value="">正在读取附近网络…</option></select>
+    <small id="wifiHelp">支持电脑所在局域网的 Wi-Fi，或电脑开启的 2.4 GHz 热点。请在设备进入配网前开启网络或热点，并确保设备能通过它访问电脑。</small>
+    <button id="refresh" type="button" disabled>刷新 Wi-Fi 列表</button>
+    <small id="scanHint" role="status" aria-live="polite">正在读取附近网络…</small>
     <label id="manualRow" hidden>Wi-Fi 名称<input id="manual" maxlength="32" autocomplete="off" disabled></label>
-    <small id="scanHint">选择电脑所在的网络，或能访问这台电脑的同一局域网。</small>
     <label for="password">Wi-Fi 密码</label>
     <input name="password" id="password" type="password" maxlength="63" autocomplete="new-password">
   </div>
-  <label for="ip">电脑 IP</label>
+  </fieldset>
+  <fieldset><legend>电脑连接</legend>
+  <label for="ip" class="first-label">电脑 IP</label>
   <input name="ip" id="ip" inputmode="decimal" placeholder="例如 192.168.1.10" maxlength="15" required>
-  <small>填写 DSH 页面显示的电脑地址。不要填 127.0.0.1、0.0.0.0 或设备自己的 IP。</small>
+  <small>填写 DSH 插件中 AI Passport 连接器页面显示的电脑地址。不要填 127.0.0.1、0.0.0.0 或设备自己的 IP。</small>
   <label for="token">4 位配对码</label>
   <input name="token" id="token" inputmode="numeric" pattern="[0-9]{4}" minlength="4" maxlength="4" placeholder="例如 1234" autocomplete="off" required>
   <small>与电脑显示的数字一致，前面的 0 也需要填写。</small>
@@ -40,36 +107,65 @@
     <input name="port" id="port" type="number" min="1" max="65535" value="3101" required>
     <small>默认 3101。只有电脑修改了端口时才需要同步修改。</small>
   </details>
-  <button id="save" disabled>保存并连接</button>
+  </fieldset>
+  </div>
+  <div class="submit-area">
+    <button id="save" disabled>保存并连接</button>
+    <p class="after-save">保存后设备会重启，并连接你选择的网络。</p>
+    <p id="s" role="status" aria-live="polite">正在读取设备配置…</p>
+  </div>
 </form>
-<p id="s" role="status" aria-live="polite">正在读取设备配置…</p>
-<details><summary>连不上时检查什么？</summary>
+<details class="help"><summary>连不上时检查什么？</summary>
   <p>确认电脑上的连接器显示“正在监听”。电脑需要保持 DSH 运行，并允许 3101 端口通过防火墙。</p>
   <p>保存后设备会重启并连接你选择的 Wi-Fi；手机可退出当前热点。设备显示“准备好了”后短按 OK 开麦，DOWN 取消，长按 OK 可返回设置。</p>
 </details>
+</main>
 <script>
   const f=document.getElementById('f'),wifi=document.getElementById('wifi'),manual=document.getElementById('manual'),keep=document.getElementById('keep'),s=document.getElementById('s'),save=document.getElementById('save')
-  let networks=[],nonce=''
+  const refresh=document.getElementById('refresh'),scanHint=document.getElementById('scanHint')
+  let networks=[],nonce='',scanning=false,saving=false
+  function buttons(){save.disabled=!nonce||scanning||saving;refresh.disabled=!nonce||scanning||saving}
   function manualNetwork(){const yes=wifi.value==='manual';document.getElementById('manualRow').hidden=!yes;manual.disabled=keep.checked||!yes;manual.required=!keep.checked&&yes}
   wifi.onchange=manualNetwork
   keep.onchange=()=>{document.getElementById('wifiFields').hidden=keep.checked;wifi.disabled=keep.checked;wifi.required=!keep.checked;f.elements.password.disabled=keep.checked;manualNetwork()}
-  fetch('/networks').then(r=>r.json()).then(data=>{
-    networks=data.networks||[];wifi.replaceChildren(new Option('请选择 Wi-Fi',''))
-    networks.forEach((n,i)=>wifi.add(new Option(n.ssid+' · '+(n.rssi>=-60?'信号强':n.rssi>=-75?'信号中':'信号弱'),String(i))))
-    wifi.add(new Option('手动输入 / 隐藏网络','manual'))
-    if(!networks.length){wifi.value='manual';manualNetwork()}
-  }).catch(()=>{wifi.replaceChildren(new Option('手动输入 Wi-Fi','manual'));manualNetwork()})
+  async function loadNetworks(rescan=false){
+    if(scanning||saving||(rescan&&!nonce))return
+    scanning=true;buttons();refresh.textContent=rescan?'正在扫描…':'刷新 Wi-Fi 列表'
+    scanHint.textContent=rescan?'正在重新扫描附近网络，请稍候…':'正在读取附近网络…'
+    try{
+      const options={cache:'no-store',signal:AbortSignal.timeout(15000)}
+      if(rescan){options.method='POST';options.headers={'X-Setup-Nonce':nonce}}
+      const r=await fetch(rescan?'/scan':'/networks',options)
+      if(!r.ok)throw Error()
+      const data=await r.json();if(!data.scanned||!Array.isArray(data.networks))throw Error()
+      // Read the selection after the request, so edits made during scanning survive.
+      const wasManual=wifi.value==='manual',selected=wasManual?manual.value:wifi.value?networks[Number(wifi.value)]?.ssid:''
+      networks=data.networks;wifi.replaceChildren(new Option('请选择 Wi-Fi',''))
+      networks.forEach((n,i)=>wifi.add(new Option(n.ssid+' · '+(n.rssi>=-60?'信号强':n.rssi>=-75?'信号中':'信号弱'),String(i))))
+      wifi.add(new Option('手动输入 / 隐藏网络','manual'))
+      const index=networks.findIndex(n=>n.ssid===selected)
+      if(wasManual||selected&&index<0||!networks.length){wifi.value='manual';if(selected)manual.value=selected}
+      else if(index>=0)wifi.value=String(index)
+      manualNetwork()
+      scanHint.textContent=networks.length?'找不到网络？先确认已开启 2.4 GHz Wi-Fi 或电脑热点，再刷新列表；隐藏网络可手动输入名称。':'未找到网络。请确认已开启 2.4 GHz Wi-Fi 或电脑热点，再刷新列表，也可手动输入名称。'
+    }catch{
+      if(!networks.length){wifi.replaceChildren(new Option('手动输入 Wi-Fi','manual'));manualNetwork()}
+      scanHint.textContent='读取网络失败。请确认仍连接设备热点后重试，也可手动输入 Wi-Fi 名称。'
+    }finally{scanning=false;refresh.textContent='刷新 Wi-Fi 列表';buttons()}
+  }
+  refresh.onclick=()=>loadNetworks(true)
+  loadNetworks()
   fetch('/current',{cache:'no-store'}).then(r=>{if(!r.ok)throw Error();return r.json()}).then(data=>{
-    nonce=data.nonce;save.disabled=!nonce;s.textContent=''
+    nonce=data.nonce;buttons();s.textContent=''
     if(data.configured){document.getElementById('keepRow').hidden=false;document.getElementById('savedWifi').textContent=data.ssid;keep.checked=true;keep.onchange();f.elements.ip.value=data.ip||'';f.elements.port.value=data.port||3101}
   }).catch(()=>{s.textContent='配置读取失败，请重新打开此页。'})
   f.onsubmit=async e=>{
-    e.preventDefault();if(!nonce)return;save.disabled=true
+    e.preventDefault();if(!nonce||scanning||saving)return;saving=true;buttons()
     const data=Object.fromEntries(new FormData(f));data.keepWifi=keep.checked
     if(!keep.checked)data.ssid=wifi.value==='manual'?manual.value:networks[Number(wifi.value)].ssid
     data.ip=data.ip.trim();data.port=Number(data.port)
-    try{const r=await fetch('/save',{method:'POST',headers:{'Content-Type':'application/json','X-Setup-Nonce':nonce},body:JSON.stringify(data)});s.textContent=await r.text();if(!r.ok)save.disabled=false}
-    catch{s.textContent='连接已断开，请查看设备是否重启；未重启时重新连接热点再试。';save.disabled=false}
+    try{const r=await fetch('/save',{method:'POST',headers:{'Content-Type':'application/json','X-Setup-Nonce':nonce},body:JSON.stringify(data)});s.textContent=await r.text();if(!r.ok){saving=false;buttons()}}
+    catch{s.textContent='连接已断开，请查看设备是否重启；未重启时重新连接热点再试。';saving=false;buttons()}
   }
 </script>
 </html>

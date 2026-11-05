@@ -9,6 +9,7 @@
 | HTTP 503、ownership busy | 检查服务、连接数和设备占用，不接管其他设备 |
 | `passport-asr-unavailable` | 检查宿主 ASR 选择和模型准备，不自动换供应商 |
 | “请检查 DSH 对话配置” | 可能是预设或专用会话恢复失败，继续看宿主，不能据此认定唯一原因 |
+| `passport-preset-changed` / “请在 DSH 刷新预设” / 旧版“请恢复原来的 DSH 预设” | 旧会话绑定另一预设；新版连接器选择可用预设并点击“刷新预设并新建会话”。只改 ID 或重连不会切换旧会话。ID 可以是中文，应以运行中宿主的预设列表为准，不根据名称猜测 |
 | `passport-recognition-failed` | 分查 PCM/WAV、ASR、取消，保留原错误边界 |
 | `passport-speech-failed` | 先独立试听宿主音频，再查 WAV → PCM → 设备 |
 | `playback queue empty` | 区分供音不足、网络抖动和设备调度 |

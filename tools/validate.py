@@ -35,6 +35,15 @@ def host_tests():
     run(*command, '-std=c11', '-Wall', '-Wextra', '-Werror', '-Itests/theme_stubs', '-Imain',
         'tests/test_online_theme.c', 'main/online_theme.c', 'main/online_state.c', '-o', theme_test)
     run(theme_test)
+    background_test = build / ('background-test.exe' if os.name == 'nt' else 'background-test')
+    run(*command, '-std=c11', '-Wall', '-Wextra', '-Werror', '-Itests/theme_stubs', '-Imain',
+        'tests/test_online_background.c', 'main/online_background.c', 'main/online_background_format.c',
+        'main/online_state.c', '-o', background_test)
+    run(background_test)
+    scan_test = build / ('setup-scan-test.exe' if os.name == 'nt' else 'setup-scan-test')
+    run(*command, '-std=c11', '-Wall', '-Wextra', '-Werror', '-Itests/setup_stubs', '-Imain',
+        'tests/test_online_setup_scan.c', 'main/online_setup_scan.c', '-o', scan_test)
+    run(scan_test)
     print('Host tests: PASS', flush=True)
 
 

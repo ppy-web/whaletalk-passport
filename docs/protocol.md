@@ -37,3 +37,29 @@ repair that Host behavior. Read the bundled debugging skill for measured evidenc
 WhaleTalk keeps the reference partition layout and Recovery hook. This protocol
 does not carry arbitrary Host credentials, route devices into unrelated sessions,
 or grant automatic permission for Agent tools.
+
+## Local appearance portal
+
+These HTTP routes exist only in the device's provisioning hotspot and are
+independent of the DSH audio protocol:
+
+- `GET /appearance` opens background selection/upload. `GET /current` adds
+  `background` (0 = Seaside Tea, 1 = Moonlit Dream, 2 = custom) and
+  `customBackground` (a usable custom image is present).
+- `POST /background/upload` requires the current `X-Setup-Nonce` and exactly
+  6,184 binary bytes. WTBG v1 starts with `57 54 42 47 01 60 80 10`, followed
+  by sixteen RGB565LE palette entries and 6,144 I4 pixel bytes, high nibble
+  first. Dimensions are fixed at 96×128. Invalid length/version/header,
+  interrupted uploads and storage errors never trigger a reboot or erase
+  connection settings. NVS stores the bounded blob under `dsh_voice/bg_custom`.
+- `POST /background/apply` requires the same nonce and JSON
+  `{"background":0|1|2}`. Custom selection requires a usable or newly uploaded
+  image. A successful preference save schedules a reboot; saved Wi-Fi,
+  pairing, endpoint and device identity are reused. No active credentials
+  are required in this request.
+
+Background and brightness preferences are additional NVS keys, not a config
+blob or partition migration. `brightness` accepts 25, 50, 75 or 100; missing
+or invalid values default to 100. Backlight sleep uses 0 without overwriting
+the preference. Thinking animation is local presentation; it neither changes
+`voice.state`, acknowledges audio early, nor shortens Host processing time.

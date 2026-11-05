@@ -53,7 +53,7 @@ const char *online_error_text(const char *code) {
     if(!strcmp(code,"passport-speech-failed"))return "请检查 DSH 语音合成";
     if(!strcmp(code,"passport-request-timeout"))return "等待超时，请重新说话";
     if(!strcmp(code,"passport-session-unavailable") || !strcmp(code,"passport-preset-unavailable"))return "请检查 DSH 对话配置";
-    if(!strcmp(code,"passport-preset-changed"))return "请恢复原来的 DSH 预设";
+    if(!strcmp(code,"passport-preset-changed"))return "请在 DSH 刷新预设";
     return "后端错误，请检查服务配置";
 }
 
@@ -96,10 +96,23 @@ bool online_endpoint_from_ip_port(const char *ip,unsigned port,char *out,size_t 
 online_theme_t online_theme_normalize(unsigned stored) {
     return stored==ONLINE_THEME_MINT?ONLINE_THEME_MINT:ONLINE_THEME_WHALE;
 }
+online_background_t online_background_normalize(unsigned stored) {
+    return stored<=ONLINE_BACKGROUND_CUSTOM?(online_background_t)stored:ONLINE_BACKGROUND_DAY;
+}
+online_background_t online_background_next(online_background_t current,bool has_custom) {
+    unsigned count=has_custom?3:2;
+    return (online_background_t)((online_background_normalize(current)+1)%count);
+}
 unsigned online_volume_next(unsigned current) {
     static const unsigned steps[]={0,25,50,75,90,100};
     for(unsigned i=0;i<sizeof(steps)/sizeof(steps[0]);i++)if(steps[i]>current)return steps[i];
     return 0;
+}
+unsigned online_brightness_normalize(unsigned stored) {
+    return stored==25 || stored==50 || stored==75 || stored==100?stored:100;
+}
+unsigned online_brightness_next(unsigned current) {
+    return online_brightness_normalize(current)%100+25;
 }
 online_idle_t online_idle_normalize(unsigned stored) {
     return stored<=ONLINE_IDLE_NEVER?(online_idle_t)stored:ONLINE_IDLE_1_MIN;
@@ -122,7 +135,13 @@ online_theme_t online_theme_next(online_theme_t theme) {
 }
 online_avatar_t online_avatar_frame(online_phase_t phase,bool mic,unsigned level,uint64_t now_ms) {
     if(phase==ONLINE_ERROR)return ONLINE_AVATAR_ERROR;
-    if(phase==ONLINE_THINKING)return ONLINE_AVATAR_THINKING;
+    if(phase==ONLINE_THINKING) {
+        /* Bounded 3.2 s loop, at most ~3 frame changes/s. No dependency on
+         * server traffic, no return to listening or fabricated completion. */
+        unsigned tick=now_ms%3200;
+        if(tick>=2200 && tick<2360)return ONLINE_AVATAR_BLINK;
+        return tick>=1400 && tick<1800?ONLINE_AVATAR_LISTENING:ONLINE_AVATAR_THINKING;
+    }
     if(phase==ONLINE_SPEAKING)return level>1800 && (now_ms/160)%2?ONLINE_AVATAR_SPEAKING:ONLINE_AVATAR_IDLE;
     if(mic && (phase==ONLINE_LISTENING || phase==ONLINE_READY))return ONLINE_AVATAR_LISTENING;
     return now_ms%4500<120?ONLINE_AVATAR_BLINK:ONLINE_AVATAR_IDLE;
@@ -138,17 +157,22 @@ online_action_t online_menu_key(online_menu_t *m,online_key_t key) {
         if(key==ONLINE_KEY_UP)return ONLINE_ACTION_VOLUME;
         if(key==ONLINE_KEY_DOWN)return ONLINE_ACTION_CANCEL;
     } else if(key==ONLINE_KEY_UP || key==ONLINE_KEY_DOWN) {
-        unsigned count=m->page==ONLINE_SETTINGS?4:2;
+        unsigned count=m->page==ONLINE_SETTINGS?ONLINE_MENU_COUNT:2;
         m->selected=(m->selected+(key==ONLINE_KEY_DOWN?1:count-1))%count;
     }
     else if(key==ONLINE_KEY_OK) {
         if(m->page==ONLINE_SETTINGS) {
-            if(!m->selected)return ONLINE_ACTION_THEME;
-            if(m->selected==1)return ONLINE_ACTION_IDLE;
-            m->page=m->selected==3?ONLINE_CONFIRM:ONLINE_HOME;m->selected=0;
+            if(m->selected==ONLINE_MENU_THEME)return ONLINE_ACTION_THEME;
+            if(m->selected==ONLINE_MENU_BACKGROUND)return ONLINE_ACTION_BACKGROUND;
+            if(m->selected==ONLINE_MENU_BRIGHTNESS)return ONLINE_ACTION_BRIGHTNESS;
+            if(m->selected==ONLINE_MENU_IDLE)return ONLINE_ACTION_IDLE;
+            if(m->selected==ONLINE_MENU_UPLOAD) {
+                m->page=ONLINE_HOME;m->selected=0;return ONLINE_ACTION_SETUP;
+            }
+            m->page=m->selected==ONLINE_MENU_SETUP?ONLINE_CONFIRM:ONLINE_HOME;m->selected=0;
         } else if(m->selected) {
             m->page=ONLINE_HOME;m->selected=0;return ONLINE_ACTION_SETUP;
-        } else {m->page=ONLINE_SETTINGS;m->selected=3;}
+        } else {m->page=ONLINE_SETTINGS;m->selected=ONLINE_MENU_SETUP;}
     }
     return ONLINE_ACTION_NONE;
 }

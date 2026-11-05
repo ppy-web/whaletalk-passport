@@ -3,11 +3,15 @@
 #include <stdio.h>
 #include <string.h>
 #include "src/misc/lv_text_private.h"
+#include "src/draw/lv_image_decoder_private.h"
 #include "online_ui.c"
 static online_status_t fixture;
 static int battery_value=87;
 static unsigned toggles,cancels,volumes,setups,themes;
-static unsigned idle_changes;
+static unsigned idle_changes,brightness_changes;
+static uint8_t custom_data[ONLINE_BG_BYTES];
+const uint8_t *online_background_data(void){return fixture.custom_background?custom_data:NULL;}
+void online_cycle_background(void){fixture.background=online_background_next(fixture.background,fixture.custom_background);}
 static unsigned backlight=100,backlight_changes;
 void bsp_display_backlight(uint8_t percent){backlight=percent;backlight_changes++;}
 static int64_t clock_us=2200000;
@@ -20,8 +24,9 @@ void online_volume(void){volumes++;}
 void online_setup(void){setups++;}
 void online_cycle_theme(void){fixture.theme=online_theme_next(fixture.theme);themes++;}
 void online_cycle_idle(void){fixture.idle=online_idle_next(fixture.idle);idle_changes++;}
+void online_cycle_brightness(void){fixture.brightness=online_brightness_next(fixture.brightness);brightness_changes++;}
 static void check_labels(lv_obj_t *o){
-    if(lv_obj_has_flag(o,LV_OBJ_FLAG_HIDDEN))return;
+    if(!lv_obj_is_visible(o))return;
     if(lv_obj_check_type(o,&lv_label_class)){
         const char *s=lv_label_get_text(o);lv_area_t a;lv_obj_get_coords(o,&a);
         assert(a.x1>=0 && a.y1>=0 && a.x2<240 && a.y2<320);
@@ -62,37 +67,130 @@ static void snap(const char *name){
     fclose(f);lv_draw_buf_destroy(b);
 }
 int main(void) {
-    lv_init();assert(lv_display_create(240,320));fixture.volume=75;
+    lv_init();assert(lv_display_create(240,320));fixture.volume=75;fixture.audio_ok=true;
     online_ui_enter(true);
+    for(unsigned frame=0;frame<ONLINE_AVATAR_COUNT;frame++) {
+        lv_image_decoder_dsc_t decoder;
+        assert(lv_image_decoder_open(&decoder,whale_avatar_view_source((online_avatar_t)frame),NULL)==LV_RESULT_OK);
+        assert(decoder.args.no_cache && decoder.decoded==NULL);
+        lv_area_t full={0,0,239,284},area={LV_COORD_MIN,LV_COORD_MIN,LV_COORD_MIN,LV_COORD_MIN};
+        unsigned rows=0,alpha_total=0;
+        uint8_t reference_row[240*3];
+        while(lv_image_decoder_get_area(&decoder,&full,&area)==LV_RESULT_OK) {
+            const lv_draw_buf_t *row=decoder.decoded;
+            assert(row && row->data_size<=1024);
+            for(unsigned n=0;n<240;n++)alpha_total+=row->data[row->header.stride+n];
+            if(area.y1==71) {
+                memcpy(reference_row,row->data,240*2);
+                memcpy(reference_row+240*2,row->data+row->header.stride,240);
+            }
+            rows++;
+        }
+        assert(rows==285 && alpha_total>1000);
+        lv_image_decoder_close(&decoder);
+        assert(lv_image_decoder_open(&decoder,whale_avatar_view_source((online_avatar_t)frame),NULL)==LV_RESULT_OK);
+        full=(lv_area_t){5,71,227,71};area=(lv_area_t){LV_COORD_MIN,LV_COORD_MIN,LV_COORD_MIN,LV_COORD_MIN};
+        assert(lv_image_decoder_get_area(&decoder,&full,&area)==LV_RESULT_OK);
+        const lv_draw_buf_t *row=decoder.decoded;
+        for(unsigned n=0;n<223;n++) {
+            assert(!memcmp(row->data+n*2,reference_row+(n+5)*2,2));
+            assert(row->data[row->header.stride+n]==reference_row[480+n+5]);
+        }
+        assert(lv_image_decoder_get_area(&decoder,&full,&area)==LV_RESULT_INVALID);
+        lv_image_decoder_close(&decoder);
+    }
     const char *messages[]={"DSH-Voice-1234","正在连接后端","确定：开始对话","我在认真听","正在请教 Agent","DSH","后端消息过大或分片无效"};
     const char *names[]={"setup","connecting","ready","listening","thinking","speaking","error"};
     for(unsigned theme=0;theme<2;theme++) {
         fixture.theme=online_theme_normalize(theme);
         for(unsigned i=0;i<7;i++){
             fixture.phase=i;fixture.mic=i>=3 && i<=5;fixture.level=19000;
+            fixture.linked=i>=ONLINE_READY && i<=ONLINE_SPEAKING;
             snprintf(fixture.message,sizeof(fixture.message),"%s",messages[i]);refresh(NULL);
             char name[48];snprintf(name,sizeof(name),"%s-%s",theme==ONLINE_THEME_WHALE?"whale":"mint",names[i]);snap(name);
             assert(lv_obj_has_flag(whale_layer,LV_OBJ_FLAG_HIDDEN)==(i==ONLINE_SETUP || theme!=ONLINE_THEME_WHALE));
             assert(lv_obj_has_flag(face_layer,LV_OBJ_FLAG_HIDDEN)==(i==ONLINE_SETUP || theme!=ONLINE_THEME_MINT));
+            assert(lv_obj_has_flag(caption,LV_OBJ_FLAG_HIDDEN)==(i!=ONLINE_ERROR && i!=ONLINE_CONNECTING));
+            assert(lv_obj_has_flag(home_controls,LV_OBJ_FLAG_HIDDEN)==(i==ONLINE_SETUP));
         }
     }
+    fixture.theme=ONLINE_THEME_WHALE;fixture.phase=ONLINE_THINKING;fixture.mic=true;
+    for(unsigned i=0;i<32;i++) {
+        clock_us=(int64_t)i*100000;refresh(NULL);
+        char name[48];snprintf(name,sizeof(name),"thinking-animation-%02u",i);snap(name);
+        assert(fixture.phase==ONLINE_THINKING && backlight==100);
+    }
+    unsigned cancelled_while_thinking=cancels;
+    online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
+    assert(cancels==cancelled_while_thinking+1 && fixture.phase==ONLINE_THINKING);
+    fixture.background=ONLINE_BACKGROUND_NIGHT;refresh(NULL);snap("background-night");
+    fixture.custom_background=true;fixture.background=ONLINE_BACKGROUND_CUSTOM;
+    const uint8_t bg_header[]={'W','T','B','G',1,96,128,16};memcpy(custom_data,bg_header,sizeof(bg_header));
+    custom_data[8]=0xff;custom_data[9]=0xcf;custom_data[10]=0x1f;custom_data[11]=0xf7;
+    for(unsigned i=0;i<ONLINE_BG_PIXELS/2;i++)custom_data[40+i]=i%48<24?0x00:0x11;
+    refresh(NULL);snap("background-custom");
+    custom_data[8]=0;custom_data[9]=0;custom_data[10]=0x82;custom_data[11]=0x08;
+    refresh(NULL);snap("background-custom-dark");
+    fixture.phase=ONLINE_ERROR;strcpy(fixture.message,"请在 DSH 刷新预设");refresh(NULL);snap("custom-dark-preset-error");
+    fixture.phase=ONLINE_THINKING;custom_data[8]=0xff;custom_data[9]=0xcf;custom_data[10]=0x1f;custom_data[11]=0xf7;
+    /* Repeated clipped decoding must stay scanline-sized and never cache a
+     * full RGB565 image or require LVGL's image-transform temporary buffers. */
+    for(unsigned repeat=0;repeat<30;repeat++) {
+        lv_image_decoder_dsc_t decoder;
+        assert(lv_image_decoder_open(&decoder,online_background_image(custom_data),NULL)==LV_RESULT_OK);
+        assert(decoder.decoded==NULL && decoder.args.no_cache);
+        lv_area_t full={3,7,237,11},area={LV_COORD_MIN,LV_COORD_MIN,LV_COORD_MIN,LV_COORD_MIN};
+        unsigned rows=0;
+        while(lv_image_decoder_get_area(&decoder,&full,&area)==LV_RESULT_OK) {
+            assert(decoder.decoded && decoder.decoded->data_size<=512);
+            const uint16_t *pixels=(const uint16_t *)decoder.decoded->data;
+            for(unsigned n=0;n<235;n++)assert(pixels[n]==(n+3<120?0xcfff:0xf71f));
+            rows++;
+        }
+        assert(rows==5);lv_image_decoder_close(&decoder);
+    }
+    fixture.phase=ONLINE_CONNECTING;strcpy(fixture.message,"正在连接后端");refresh(NULL);
+    snap("custom-background-connecting");
+    online_ui_key(BSP_BTN_OK,BSP_BTN_PRESS);refresh(NULL);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);
+    assert(menu.page==ONLINE_SETTINGS);
+    online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);assert(menu.selected==ONLINE_MENU_BACKGROUND);
+    snap("custom-settings-offline");
+    online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);assert(menu.page==ONLINE_HOME);
+    fixture.phase=ONLINE_THINKING;
+    fixture.custom_background=false;refresh(NULL);snap("background-custom-fallback");
+    fixture.background=ONLINE_BACKGROUND_DAY;clock_us=2200000;refresh(NULL);
     fixture.theme=ONLINE_THEME_WHALE;fixture.phase=ONLINE_READY;fixture.mic=false;
     clock_us=4500000;refresh(NULL);snap("whale-blink");clock_us=2200000;
     fixture.phase=ONLINE_READY;fixture.mic=false;
     const unsigned volume_values[]={0,25,50,75,90,100,0};
     for(unsigned i=0;i<sizeof(volume_values)/sizeof(volume_values[0]);i++) {
         fixture.volume=volume_values[i];refresh(NULL);check();
-        char expected[32];
-        snprintf(expected,sizeof(expected),"%u%%",fixture.volume);
-        assert(strstr(lv_label_get_text(volume_label),expected));
-        assert(!lv_obj_has_flag(volume_label,LV_OBJ_FLAG_HIDDEN));
+        assert(volume_icon.value==(int)fixture.volume);
+        assert(!lv_obj_has_flag(home_controls,LV_OBJ_FLAG_HIDDEN));
     }
     snap("muted");fixture.volume=75;refresh(NULL);snap("volume");
-    battery_value=-1;update_battery(NULL);check();
+    /* Transport status is independent of the phase and microphone switch. */
+    fixture.linked=true;fixture.mic=false;refresh(NULL);
+    assert(link_icon.value && !mic_icon.value && !action_mic.value);
+    fixture.linked=false;fixture.mic=true;refresh(NULL);
+    assert(!link_icon.value && mic_icon.value && action_mic.value);
+    snap("link-lost-mic-on");fixture.mic=false;fixture.linked=true;refresh(NULL);
+    const int battery_values[]={-1,0,10,100,150};
+    const char *battery_names[]={"battery-unknown","battery-empty","battery-low","battery-full","battery-clamped"};
+    for(unsigned i=0;i<sizeof(battery_values)/sizeof(battery_values[0]);i++) {
+        battery_value=battery_values[i];update_battery(NULL);check();snap(battery_names[i]);
+        assert(battery_icon.value==(battery_value>100?100:battery_value));
+    }
+    battery_value=87;update_battery(NULL);
+    fixture.audio_ok=false;strcpy(fixture.message,"音频不可用，请检查设备");refresh(NULL);
+    assert(!lv_obj_has_flag(caption,LV_OBJ_FLAG_HIDDEN));snap("audio-unavailable");
+    fixture.audio_ok=true;fixture.message[0]=0;refresh(NULL);assert(lv_obj_has_flag(caption,LV_OBJ_FLAG_HIDDEN));
     online_ui_key(BSP_BTN_OK,BSP_BTN_PRESS);assert(!toggles);
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(toggles==1);
     online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);refresh(NULL);assert(volumes==1);
-    online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);assert(cancels==1);
+    unsigned before_cancel=cancels;
+    online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);assert(cancels==before_cancel+1);
     online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);assert(setups==0);
     online_theme_t before=fixture.theme;
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(themes==1 && fixture.theme!=before);
@@ -102,6 +200,16 @@ int main(void) {
     refresh(NULL);snap("settings");
     strcpy(fixture.ssid,"12345678901234567890123456789012");refresh(NULL);check();
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(fixture.background==ONLINE_BACKGROUND_NIGHT);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(fixture.background==ONLINE_BACKGROUND_DAY);
+    online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
+    for(unsigned i=0;i<4;i++) {
+        online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);check();
+        assert(backlight==(i+1)*25 && fixture.brightness==backlight);
+        char name[48];snprintf(name,sizeof(name),"brightness-%u",backlight);snap(name);
+    }
+    assert(brightness_changes==4);
+    online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
     for(unsigned i=0;i<4;i++) {
         online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);check();
         assert(fixture.idle==(online_idle_t)((i+1)%4));
@@ -109,6 +217,7 @@ int main(void) {
         snap(states[i]);
     }
     assert(idle_changes==4 && menu.page==ONLINE_SETTINGS);
+    online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);snap("confirm");assert(setups==0);
@@ -162,7 +271,20 @@ int main(void) {
             clock_us+=INT64_C(86400000000);refresh(NULL);assert(backlight==100);
         }
     }
-    buttons_available=false;refresh(NULL);check();
+    /* Wake restores the chosen level; changing a preference while asleep
+     * never lights the panel until a real wake event occurs. */
+    fixture.phase=ONLINE_LISTENING;fixture.idle=ONLINE_IDLE_1_MIN;
+    for(unsigned percent=25;percent<=100;percent+=25) {
+        fixture.brightness=percent;atomic_store(&pending_activity,true);refresh(NULL);
+        assert(backlight==percent);
+        clock_us+=60000000;refresh(NULL);assert(backlight==0);
+        fixture.brightness=online_brightness_next(percent);refresh(NULL);assert(backlight==0);
+        unsigned before=toggles;
+        online_ui_key(BSP_BTN_OK,BSP_BTN_PRESS);refresh(NULL);assert(backlight==fixture.brightness);
+        online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(toggles==before);
+        online_ui_key(BSP_BTN_OK,BSP_BTN_RELEASE);
+    }
+    fixture.brightness=100;buttons_available=false;refresh(NULL);check();
     assert(backlight==100);
     puts("Online UI: both themes, phases, glyphs, clipping, bounds and controls PASS");
 }

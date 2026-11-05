@@ -17,6 +17,18 @@ connection, ready, listening, thinking, speaking, error, settings and confirmed
 reconfiguration screens. Main labels and states use 16px fonts and the provisioning address uses 20px. Chinese labels use compiled font subsets; arbitrary
 model-response transcripts are not displayed.
 
+The home title is centered. To its left, joined/broken chain links show the DSH
+connection, followed by a microphone icon with a slash when disabled. An enabled
+microphone does not imply audio is currently uploading. The battery at the right
+fills with its measured charge, turns red at 15% or below, and shows a dash when
+unknown. Normal listening, thinking and speech use a waveform, three dots and a
+speaker alongside the character; connection and error details remain readable.
+The three bottom groups map UP to volume, OK to the microphone, and DOWN to
+cancel. Five volume bars represent 25, 50, 75, 90 and 100%; a crossed speaker is
+muted. Each gesture hint has a rounded border and at most two icons; volume bars
+are integrated into the speaker indicator. The home screen omits the hold-OK
+hint; holding OK still opens settings.
+
 | Button | Home action |
 | --- | --- |
 | Short OK | Toggle microphone; initially closed |
@@ -24,7 +36,33 @@ model-response transcripts are not displayed.
 | Short DOWN | Cancel recognition, generation or playback |
 | Hold OK | Open settings; hold again to return home |
 
-In settings, select the second row (息屏) and briefly press OK to cycle through
+Thinking cycles through thoughtful, attentive and blinking expressions every
+3.2 seconds, alongside bouncing dots. It remains in the real processing phase
+and DOWN still cancels. This does not shorten Host ASR, model or TTS latency.
+
+The second settings row (背景) cycles Seaside Tea, Moonlit Dream and an available
+custom background. Selection applies immediately, survives restart and is saved
+after thinking/speech finishes. Failed saves can be retried. The list scrolls
+with UP/DOWN so the upload, return-home and reconfiguration actions remain reachable.
+Select 上传背景 to restart into the setup hotspot, interrupting voice while keeping
+saved connection information. Connect a phone to `DSH-Voice-*`, open
+`http://192.168.4.1`, then select the top 自定义背景 tab. The 连接鲸语 tab returns to network setup. Choose a built-in or upload JPG, PNG
+or WebP (up to 8 MB and 24 megapixels). The browser center-crops to 3:4 and
+quantizes to 96×128 with 16 colors, showing the converted result. Uploads are
+exactly 6,184 bytes. Upload first, then save/restart; no Wi-Fi password or pairing
+code is needed again. The device retains the encoded data and renders with a
+480-byte scanline rather than expanding/scaling a full RGB565 image. The existing
+`dsh_voice` NVS namespace stores the image;
+partitions, device identity and connection settings are preserved. Invalid data
+or allocation failures fall back to a built-in without erasing storage.
+
+The third settings row (亮度) cycles 25%, 50%, 75% and 100% backlight brightness.
+Changes apply immediately and persist across restarts; the default is 100%.
+Sleeping still sets 0%; a key wake or thinking/speech restores the chosen level.
+Save errors appear in settings; cycle again to retry. Flash writes wait until
+thinking/speech finishes.
+
+In settings, select the fourth row (息屏) and briefly press OK to cycle through
 1 minute, 3 minutes, 10 minutes and Never. Changes apply immediately and are
 saved across restarts; the default is 1 minute. A failed save is shown in
 settings; cycle again to retry. Saving is deferred while thinking or speaking.
@@ -103,9 +141,17 @@ C state tests, the firmware gate, LVGL preview and diagnostic helper tests.
 1. Prepare and separately test Host ASR (such as SenseVoice), the default conversation model and plugin TTS.
 The default Agent preset is the plugin’s `whale-girl` (enable the Whale Girl preset component first). The default workspace is `~/.dsh-xiaomi-tts/passport/workspace`, created before a new conversation. Existing conversations keep their preset and directory.
 
+To change presets, choose one from the updated DSH connector's conversation list and click
+“Apply preset and start a new conversation”. The device reconnects automatically, retaining old
+conversation history and existing Wi-Fi/pairing settings. Normal saves and reconnects retain the
+current conversation. IDs may contain Chinese; use the Host roster and reload it after enabling
+a new preset. The home status bar and required messages use 70% background opacity, and the
+outlined key hints use 60%, allowing the picture to show through while keeping controls legible.
+
 2. Enable AI Passport Connector and **generate a pairing code and enable the connection**. It displays available computer IPs and **four digits**, and listens on `0.0.0.0:3101`. Enter the computer LAN IP on the device, never `0.0.0.0`, `127.0.0.1` or the device address.
 3. Join the displayed `DSH-Voice-*` hotspot on a phone; **no password is needed**. Open `http://192.168.4.1` and enter the computer IP plus the same four digits, including leading zeros.
 4. First-time setup also needs 2.4 GHz Wi-Fi credentials. Keep saved Wi-Fi to change only the computer address or pairing code. Port 3101 is under Advanced settings.
+   Use Wi-Fi on the computer's LAN or its 2.4 GHz mobile hotspot; enable it before entering setup. If missing, use **Refresh Wi-Fi list** to scan again, or enter a hidden network manually. Reflashing is unnecessary. The setup page may briefly slow down during scanning; wait for the results.
 5. Saving restarts the device. When ready, briefly press OK, speak and pause for the complete reply. Hold OK to open settings and reconfigure.
 
 Every mode uses four-digit pairing and admits only local/private LAN devices. Existing long credentials remain usable during migration; older firmware needs an update for short codes. The computer distinguishes listener, ASR and device readiness. The device distinguishes pairing mismatch, a disabled listener, wrong port and timeouts.

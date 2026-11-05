@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-05",
+  "tool": "built-in image_gen.imagegen (no CLI/API fallback)",
+  "assets": [
+    {
+      "output": "seaside-tea-source.png",
+      "prompt": "Use case: illustration-story. Create a finished portrait 3:4 background illustration for a 240x320 small companion device. Theme: 晴海茶室, the gentle home of a blue-haired chibi whale girl maid. A luminous seaside tea room with a tall arched window, calm turquoise sea and very distant tiny whale-shaped cloud, a small porcelain teacup and blue ribbon tucked into the lower side edge, subtle white lace and shell details. Polished Japanese anime environment painting, clean readable forms, tender pale icy blues, cream and soft aqua, warm clear daylight. Composition: background only, NO people or creatures in the foreground. The central 70% must stay quiet and low contrast to accommodate a large character portrait overlay. Keep both the upper 10% and lower 18% especially pale and calm for dark status icons and controls. Objects and environmental detail mainly near side edges, no hard border. No lettering, text, UI, controls, logos, watermark. Output one coherent image, portrait 3:4 aspect ratio."
+    },
+    {
+      "output": "moonlit-dream-source.png",
+      "prompt": "Use case: illustration-story. Create a finished portrait 3:4 device background illustration, theme 星夜鲸梦, for a blue-haired chibi whale maid's small 240x320 companion screen. An airy moonlit seaside observatory alcove, softly glowing crescent moon in the upper side corner, distant stars and one very subtle whale-shaped constellation over a calm silvery lavender sea, sheer curtains and a few delicate blue ribbons at the side edges, small seashell lamp near lower edge. Polished Japanese anime background painting, tender pale periwinkle, powder blue, pearl white and muted lavender. This is a LIGHT moonlit dream, NOT a dark navy night wallpaper: upper 10% and lower 18% stay very pale for dark icons and controls. Central 70% is quiet, low contrast negative space reserved for a large character portrait, environment detail mostly at edges. No foreground person, no character, no text, lettering, UI, frame, watermark or logo. One coherent portrait image, 3:4 aspect ratio. It should feel like an alternative nighttime home in the same gentle whale maid world as a daylight seaside tea room."
+    },
+    {
+      "input": "../characters/history/whale-girl-atlas-v1.png",
+      "output": "../characters/history/whale-girl-transparent-atlas-v1.png",
+      "transparent_background": true,
+      "prompt": "Use case: background-extraction. Edit the attached six-frame expression sprite atlas. Remove ONLY the pale blue background everywhere around each of the six characters, replacing it with genuine alpha transparency. Preserve the six blue-haired whale maid characters, every expression, pose, color, identity, camera and composition exactly. Keep the exact three-column two-row equal-square atlas layout and the same canvas dimensions. No rearranging, rescaling, new objects, new poses, borders, text or extra marks. Keep the white maid headband and white outfit opaque: remove only exterior background pixels and gaps between hair and body. Produce clean antialiased transparent cutout edges suitable for compositing over custom backgrounds. Return one transparent RGBA six-cell atlas."
+    }
+  ]
+}

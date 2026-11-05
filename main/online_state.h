@@ -7,10 +7,15 @@ typedef enum { ONLINE_SETUP, ONLINE_CONNECTING, ONLINE_READY, ONLINE_LISTENING,
 typedef enum { ONLINE_THEME_WHALE, ONLINE_THEME_MINT } online_theme_t;
 online_theme_t online_theme_normalize(unsigned stored);
 online_theme_t online_theme_next(online_theme_t theme);
+typedef enum { ONLINE_BACKGROUND_DAY, ONLINE_BACKGROUND_NIGHT, ONLINE_BACKGROUND_CUSTOM } online_background_t;
+online_background_t online_background_normalize(unsigned stored);
+online_background_t online_background_next(online_background_t current,bool has_custom);
 typedef enum { ONLINE_AVATAR_IDLE, ONLINE_AVATAR_LISTENING, ONLINE_AVATAR_THINKING,
     ONLINE_AVATAR_SPEAKING, ONLINE_AVATAR_BLINK, ONLINE_AVATAR_ERROR, ONLINE_AVATAR_COUNT } online_avatar_t;
 online_avatar_t online_avatar_frame(online_phase_t phase,bool mic,unsigned level,uint64_t now_ms);
 unsigned online_volume_next(unsigned current);
+unsigned online_brightness_normalize(unsigned stored);
+unsigned online_brightness_next(unsigned current);
 
 /* Backlight idle timeout; voice transport and microphone remain independent. */
 typedef enum { ONLINE_IDLE_1_MIN, ONLINE_IDLE_3_MIN, ONLINE_IDLE_10_MIN, ONLINE_IDLE_NEVER } online_idle_t;
@@ -35,7 +40,10 @@ bool online_endpoint_from_ip_port(const char *ip,unsigned port,char *out,size_t 
 typedef enum { ONLINE_HOME, ONLINE_SETTINGS, ONLINE_CONFIRM } online_page_t;
 typedef enum { ONLINE_KEY_OK=1, ONLINE_KEY_UP, ONLINE_KEY_DOWN, ONLINE_KEY_LONG } online_key_t;
 typedef enum { ONLINE_ACTION_NONE, ONLINE_ACTION_MIC, ONLINE_ACTION_VOLUME,
-    ONLINE_ACTION_CANCEL, ONLINE_ACTION_SETUP, ONLINE_ACTION_THEME, ONLINE_ACTION_IDLE } online_action_t;
+    ONLINE_ACTION_CANCEL, ONLINE_ACTION_SETUP, ONLINE_ACTION_THEME, ONLINE_ACTION_IDLE,
+    ONLINE_ACTION_BACKGROUND, ONLINE_ACTION_BRIGHTNESS } online_action_t;
+typedef enum { ONLINE_MENU_THEME, ONLINE_MENU_BACKGROUND, ONLINE_MENU_BRIGHTNESS, ONLINE_MENU_IDLE,
+    ONLINE_MENU_UPLOAD, ONLINE_MENU_HOME, ONLINE_MENU_SETUP, ONLINE_MENU_COUNT } online_menu_item_t;
 typedef struct { online_page_t page; unsigned selected; } online_menu_t;
 online_action_t online_menu_key(online_menu_t *menu,online_key_t key);
 

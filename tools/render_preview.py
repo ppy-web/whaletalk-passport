@@ -18,4 +18,8 @@ for index, name in enumerate(states):
     with Image.open(root / f'{name}.png') as frame:
         sheet.paste(frame, (x, y + 24))
 sheet.save(root / 'overview.png')
+animation = [Image.open(root / f'thinking-animation-{index:02}.png').convert('RGB') for index in range(32)]
+animation[0].save(root / 'thinking-animation.gif', save_all=True, append_images=animation[1:], duration=100, loop=0)
+for frame in animation:
+    frame.close()
 print(root / 'overview.png')

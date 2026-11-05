@@ -1,0 +1,58 @@
+{
+  "date": "2026-11-05",
+  "tool": "built-in image_gen.imagegen",
+  "active_atlases": [
+    "whale-girl-atlas.png",
+    "whale-girl-transparent-atlas.png"
+  ],
+  "final_generated_source": "whale-girl-front-atlas-v2-alpha.png",
+  "actual_canvas": [
+    1536,
+    1024
+  ],
+  "device_frames": {
+    "count": 6,
+    "width": 240,
+    "height": 285,
+    "format": "256-entry RGB565/A8 palette + I8 pixels; native scanline decoder",
+    "flash_bytes": 415008,
+    "pixel_row_bytes": 720
+  },
+  "notes": "Generator retained the square-cell canvas despite the first prompt's requested portrait cells. The square-cell artwork remains the canonical source. The compiler resamples and crops the high-resolution source into the enlarged screen composition before palette encoding; runtime drawing uses only one native RGB565/A8 row. Historical front atlases are not runtime assets. The side-view reference is unchanged.",
+  "steps": [
+    {
+      "inputs": [
+        "history/whale-girl-transparent-atlas-v1.png",
+        "whale-girl-reference.png"
+      ],
+      "output": "history/whale-girl-front-atlas-v2-draft.png",
+      "transparent_background": true,
+      "prompt": "Use case: identity-preserve, precise-object-edit, outpainting. Image 1 is the EDIT TARGET: the current 3-column x 2-row six-expression transparent atlas of our blue-haired chibi whale maid. Image 2 is a CHARACTER/COSTUME REFERENCE ONLY, NOT a pose target: its side view naturally shows only one headphone. Revise ALL SIX front-facing sprites in Image 1 consistently. Keep the same cute face, eyes, blue hair, curled forelock, white maid headband, navy-and-white dress and central sapphire bow; preserve the exact six expression order: top row idle smile / attentive listening closed mouth / thoughtful upward glance pursed mouth; bottom row open-mouth speaking / BOTH eyes closed blink / mild worried error. Every sprite must face the viewer STRAIGHT ON, with symmetric front-facing head and shoulders. On BOTH the LEFT and RIGHT sides visibly show a matching dark oval earcup with cyan accent ring, small blue bow and outward whale-fin wing, consistent with the existing right-side design. Move a little hair aside as necessary so BOTH earcups are unmistakably visible; do not cover either one with bangs. This is a small correction, preserve character identity and large-head scale. Also extend the portrait downward by drawing more of the upper torso to the waist and a little white apron based on reference 2, instead of the current abrupt bust cut. Hands stay out of frame. IMPORTANT NEW CANVAS/GRID: output canvas 1536x1152 pixels, exactly 3 columns and 2 rows, equal PORTRAIT cells 512x576 (8:9 aspect), touching edge to edge, no separators or margins. Keep head/face near the same position and scale within the top original 512px of each cell; use the added 64px at the bottom for the torso extension. All six cells must have identical head, earcup and body registration, scale and silhouette, only facial expression changes. Surround everything with genuine alpha transparency. At the bottom of EACH cell, make the entire lower torso and hair softly fade into TRANSPARENCY over roughly the last 90 pixels, reaching zero opacity before the bottom edge, avoiding a straight cut. This must be a true alpha fade, NOT a white/blue gradient, fog, halo, glow, opaque backdrop or checkerboard drawing. Character upper face and headphones remain opaque and crisp. Preserve opaque white costume. No text, labels, extra characters, UI, frames or watermarks. Deliver one finished six-cell transparent sprite atlas, 1536x1152, with bilateral visible headphones and extended softly fading lower portraits."
+    },
+    {
+      "inputs": [
+        "history/whale-girl-front-atlas-v2-draft.png"
+      ],
+      "output": "whale-girl-front-atlas-v2-alpha.png",
+      "transparent_background": true,
+      "prompt": "Use case: background-extraction / precise alpha cleanup. Refine ONLY transparency in this existing six-expression atlas; preserve the characters, faces, bilateral headphones, extended waists/aprons, colors, exact positions, scale, 1536x1024 canvas and 3x2 equal-square grid. Do not redraw the characters or change expressions. Remove all gray/white fog and halos OUTSIDE the character silhouettes, making empty space truly alpha=0. For the LOWER 20% of EACH 512x512 cell only, apply a smooth alpha fade to the whole character (torso, apron and hair together): opaque at y=410, gradually transparent by y=494, and the FINAL 18 rows y=494..511 of EACH cell must be completely alpha=0 across the entire width. Ensure this applies independently to both atlas rows: the bottom of the top-row sprites fades to zero before y=512, not into the next row. This is a transparent opacity ramp, absolutely NO white paint, fog, light gradient, backdrop, glow or checkerboard. Keep all white headbands and upper clothing opaque, all faces and both headphones crisp and unchanged. Preserve clean antialiased hair edges above the lower fade. No cropping at the torso, no new art, no text. Deliver the same six-cell atlas as a genuine transparent PNG with only this alpha refinement."
+    }
+  ],
+  "composition": {
+    "portrait_size": [
+      280,
+      280
+    ],
+    "portrait_screen_position": [
+      -20,
+      38
+    ],
+    "viewport": [
+      0,
+      35,
+      240,
+      285
+    ],
+    "purpose": "Keep the full forelock visible below the status bar, center the face and extend the lower fade behind the bottom controls."
+  }
+}
