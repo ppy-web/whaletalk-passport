@@ -56,6 +56,11 @@ code is needed again. The device retains the encoded data and renders with a
 partitions, device identity and connection settings are preserved. Invalid data
 or allocation failures fall back to a built-in without erasing storage.
 
+Download eight sample PNGs from the [background gallery and upload instructions](background-examples.md)
+(Chinese): mint, a Whale Girl lagoon, night, four seasons and a rainy reading nook.
+Files live in `assets/backgrounds/examples/` and are examples for manual upload;
+they are not added to the built-in choices. Only the most recently uploaded custom image is retained.
+
 The third settings row (亮度) cycles 25%, 50%, 75% and 100% backlight brightness.
 Changes apply immediately and persist across restarts; the default is 100%.
 Sleeping still sets 0%; a key wake or thinking/speech restores the chosen level.

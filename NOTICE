@@ -20,3 +20,9 @@ Whale Girl character reference was supplied from the companion plugin's
 assets/whale-girl-front.png. The expression atlas was generated with built-in
 imagegen using that reference. See docs/whale-girl-assets.md for provenance,
 the generation prompt and deterministic device-format conversion.
+
+Downloadable custom-background examples in assets/backgrounds/examples/ were
+generated with built-in imagegen and resized with Pillow on 2026-11-05. They
+are provided under this repository's MIT license and are not embedded in firmware.
+See docs/background-examples.md and assets/backgrounds/examples/generation.json
+for the gallery, prompts, conversion details and output hashes.

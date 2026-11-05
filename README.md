@@ -25,6 +25,10 @@ DSH 的 AI Passport 连接器、ASR、Agent 与 TTS 继续由电脑端提供。
 
 网页截图为本地预览，未连接设备，因此读取配置失败、刷新、上传和保存按钮禁用属于预期状态；实际使用需连接设备热点。
 
+想试试自定义背景，可以从[背景示例与上传说明](docs/background-examples.md)下载 8 张示例 PNG：
+薄荷素底、鲸鱼娘海景、夜间、四季和雨窗场景。图片位于
+[`assets/backgrounds/examples/`](assets/backgrounds/examples/)，仅供手动下载上传，不增加固件内置背景。
+
 ## 体验
 
 - 鲸鱼娘与薄荷表情双界面，支持内置与自定义背景，三个实体按键。

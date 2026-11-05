@@ -16,6 +16,7 @@
 - `assets/backgrounds/seaside-tea.png`、`moonlit-dream.png`：240×320 PNG，供配置网页预览。
 - `assets/backgrounds/whale_backgrounds.c`：两幅 240×320 RGB565，合计 307,200 字节，直接从 Flash 绘制。
 - [生成记录与提示词](../assets/backgrounds/generation.json)：两套背景及透明图集的生成工具、输入输出和完整提示词。
+- `assets/backgrounds/examples/`：8 张可下载上传的 240×320 示例背景，不参与固件构建；见[预览、下载与上传说明](background-examples.md)及[独立生成记录](../assets/backgrounds/examples/generation.json)。
 
 生成图并非 FoloToy SDK 自带的角色资产。项目保留参考图和提示词以便后续一致地制作素材；原 SDK、字体与参考代码来源仍见根目录 NOTICE。
 

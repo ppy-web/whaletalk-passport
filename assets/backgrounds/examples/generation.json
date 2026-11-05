@@ -1,0 +1,112 @@
+{
+  "date": "2026-11-05",
+  "tool": "built-in image_gen.imagegen (no CLI/API fallback)",
+  "purpose": "Downloadable custom-background examples; not embedded in firmware",
+  "conversion": "Pillow ImageOps.fit to 240x320 RGB PNG using LANCZOS, no artwork retouching. Upload page performs its own 96x128 / 16-color conversion.",
+  "assets": [
+    {
+      "output": "mint-solid.png",
+      "source_size": [
+        1086,
+        1448
+      ],
+      "size": [
+        240,
+        320
+      ],
+      "sha256": "6653cd9505aa2ba087eac7aa5aa821c39bfbc67708afb4449eb0128361420b04",
+      "prompt": "Use case: illustration-story. Asset: ONE standalone wallpaper for a tiny 240x320 portrait companion screen. Output exactly 768x1024 or another exact portrait 3:4 size. Background artwork only, no characters, no faces, no animals in foreground, no letters, text, UI, borders, logos or watermarks. Large simple flat or gently cel-shaded color shapes, restrained palette of at most 12 dominant colors, no grain, no tiny texture, no fine repetitive lines, no photorealism. It must remain attractive after downsampling to 96x128 and 16 colors. Keep central 65% of width, from 15% to 85% height quiet and low contrast for an expressive face or a large blue-haired whale maid portrait overlay. Top 12% and bottom 18% also calm for translucent UI panels. Environmental accents are sparse and confined mainly to side edges; no central focal subject. Deliver only the image. Theme: A perfectly uniform solid pale mint green #DDF3E8 edge to edge. Absolutely no gradients, objects, shading, decorative marks, texture or vignette. A clean calm pastel canvas for dark mint-face expressions."
+    },
+    {
+      "output": "whale-lagoon.png",
+      "source_size": [
+        1086,
+        1448
+      ],
+      "size": [
+        240,
+        320
+      ],
+      "sha256": "80e0e617fbae79c3b69b7149a7b00dd2cad01fa0644ef334d8d68af022b14bae",
+      "prompt": "Use case: illustration-story. Asset: ONE standalone wallpaper for a tiny 240x320 portrait companion screen. Output exactly 768x1024 or another exact portrait 3:4 size. Background artwork only, no characters, no faces, no animals in foreground, no letters, text, UI, borders, logos or watermarks. Large simple flat or gently cel-shaded color shapes, restrained palette of at most 12 dominant colors, no grain, no tiny texture, no fine repetitive lines, no photorealism. It must remain attractive after downsampling to 96x128 and 16 colors. Keep central 65% of width, from 15% to 85% height quiet and low contrast for an expressive face or a large blue-haired whale maid portrait overlay. Top 12% and bottom 18% also calm for translucent UI panels. Environmental accents are sparse and confined mainly to side edges; no central focal subject. Deliver only the image. Theme: Whale Girl's quiet turquoise lagoon seen through a white seaside archway. Pearl white, pale aqua, misty blue. A shell and small cyan ribbon tucked against the lower left edge; the far sea occupies the calm middle. Minimal polished anime environment, broad shapes."
+    },
+    {
+      "output": "night-moon.png",
+      "source_size": [
+        1086,
+        1448
+      ],
+      "size": [
+        240,
+        320
+      ],
+      "sha256": "cb5d2e468812416e73a1ac4ddc5a192840c8853a06ebd98e26aea21c35180d76",
+      "prompt": "Use case: illustration-story. Asset: ONE standalone wallpaper for a tiny 240x320 portrait companion screen. Output exactly 768x1024 or another exact portrait 3:4 size. Background artwork only, no characters, no faces, no animals in foreground, no letters, text, UI, borders, logos or watermarks. Large simple flat or gently cel-shaded color shapes, restrained palette of at most 12 dominant colors, no grain, no tiny texture, no fine repetitive lines, no photorealism. It must remain attractive after downsampling to 96x128 and 16 colors. Keep central 65% of width, from 15% to 85% height quiet and low contrast for an expressive face or a large blue-haired whale maid portrait overlay. Top 12% and bottom 18% also calm for translucent UI panels. Environmental accents are sparse and confined mainly to side edges; no central focal subject. Deliver only the image. Theme: A quiet deep ink-blue night sky above a dark indigo sea. A small cream crescent at the upper right side edge, just three sparse broad stars near the side edges, dark muted teal water at the bottom. Central area is uninterrupted dark blue; softly layered flat silhouettes, sleep-friendly calm, no bright central glow."
+    },
+    {
+      "output": "spring-sakura.png",
+      "source_size": [
+        1086,
+        1448
+      ],
+      "size": [
+        240,
+        320
+      ],
+      "sha256": "5050fb32424af77437101e080a7db5ca71f2ded81ca8cb1b276b87312c82eef5",
+      "prompt": "Use case: illustration-story. Asset: ONE standalone wallpaper for a tiny 240x320 portrait companion screen. Output exactly 768x1024 or another exact portrait 3:4 size. Background artwork only, no characters, no faces, no animals in foreground, no letters, text, UI, borders, logos or watermarks. Large simple flat or gently cel-shaded color shapes, restrained palette of at most 12 dominant colors, no grain, no tiny texture, no fine repetitive lines, no photorealism. It must remain attractive after downsampling to 96x128 and 16 colors. Keep central 65% of width, from 15% to 85% height quiet and low contrast for an expressive face or a large blue-haired whale maid portrait overlay. Top 12% and bottom 18% also calm for translucent UI panels. Environmental accents are sparse and confined mainly to side edges; no central focal subject. Deliver only the image. Theme: Early spring garden, pale blush pink sky and ivory atmosphere, a simple cherry blossom branch entering only from the upper left side edge, a few broad pastel petals at the lower right edge, distant sage garden shapes. Very sparse Japanese anime background; central region is almost empty pale blush."
+    },
+    {
+      "output": "summer-shore.png",
+      "source_size": [
+        1086,
+        1448
+      ],
+      "size": [
+        240,
+        320
+      ],
+      "sha256": "6616fb1e945922d3aec672d996dd3bd7c483f9f7bd349c2e46b63444bdeb1501",
+      "prompt": "Use case: illustration-story. Asset: ONE standalone wallpaper for a tiny 240x320 portrait companion screen. Output exactly 768x1024 or another exact portrait 3:4 size. Background artwork only, no characters, no faces, no animals in foreground, no letters, text, UI, borders, logos or watermarks. Large simple flat or gently cel-shaded color shapes, restrained palette of at most 12 dominant colors, no grain, no tiny texture, no fine repetitive lines, no photorealism. It must remain attractive after downsampling to 96x128 and 16 colors. Keep central 65% of width, from 15% to 85% height quiet and low contrast for an expressive face or a large blue-haired whale maid portrait overlay. Top 12% and bottom 18% also calm for translucent UI panels. Environmental accents are sparse and confined mainly to side edges; no central focal subject. Deliver only the image. Theme: Clear summer shore in pale sky blue and warm sand, sea horizon at lower third; two broad green tropical leaves enter only from the far upper right edge, a little curved surf near the lower side. Sunlit airy blue, aqua and warm cream, relaxed summer, very simple shapes."
+    },
+    {
+      "output": "autumn-maple.png",
+      "source_size": [
+        1086,
+        1448
+      ],
+      "size": [
+        240,
+        320
+      ],
+      "sha256": "78392ca16e66c9b323372f15e70872e8ca1e39723e4417bae24af5b729aa0523",
+      "prompt": "Use case: illustration-story. Asset: ONE standalone wallpaper for a tiny 240x320 portrait companion screen. Output exactly 768x1024 or another exact portrait 3:4 size. Background artwork only, no characters, no faces, no animals in foreground, no letters, text, UI, borders, logos or watermarks. Large simple flat or gently cel-shaded color shapes, restrained palette of at most 12 dominant colors, no grain, no tiny texture, no fine repetitive lines, no photorealism. It must remain attractive after downsampling to 96x128 and 16 colors. Keep central 65% of width, from 15% to 85% height quiet and low contrast for an expressive face or a large blue-haired whale maid portrait overlay. Top 12% and bottom 18% also calm for translucent UI panels. Environmental accents are sparse and confined mainly to side edges; no central focal subject. Deliver only the image. Theme: Quiet autumn lakeside with creamy apricot sky, soft ochre ground and a muted terracotta maple branch at the far upper right side edge, two broad fallen leaves near the lower left corner. Warm paper-like flat colors without texture, central space mostly pale apricot with a faint distant lake."
+    },
+    {
+      "output": "winter-snow.png",
+      "source_size": [
+        1086,
+        1448
+      ],
+      "size": [
+        240,
+        320
+      ],
+      "sha256": "db95038b4b3fb2eae1bc0e9e976c291b1704b3a5bab7fd544d1a31302c051b06",
+      "prompt": "Use case: illustration-story. Asset: ONE standalone wallpaper for a tiny 240x320 portrait companion screen. Output exactly 768x1024 or another exact portrait 3:4 size. Background artwork only, no characters, no faces, no animals in foreground, no letters, text, UI, borders, logos or watermarks. Large simple flat or gently cel-shaded color shapes, restrained palette of at most 12 dominant colors, no grain, no tiny texture, no fine repetitive lines, no photorealism. It must remain attractive after downsampling to 96x128 and 16 colors. Keep central 65% of width, from 15% to 85% height quiet and low contrast for an expressive face or a large blue-haired whale maid portrait overlay. Top 12% and bottom 18% also calm for translucent UI panels. Environmental accents are sparse and confined mainly to side edges; no central focal subject. Deliver only the image. Theme: Quiet winter blue hour, powder blue sky and white snowbanks, one simplified snow-covered fir partly cropped by the far left edge and a tiny warm amber window in a very distant cabin at far lower right. Soft slate blue, pearl white, muted lavender, broad calm shapes, no snowflake pattern."
+    },
+    {
+      "output": "rain-window.png",
+      "source_size": [
+        1086,
+        1448
+      ],
+      "size": [
+        240,
+        320
+      ],
+      "sha256": "517f44bf36608f700fa48be71ce7f5f1dfb4a0ca1b0837015fabe801769f0c6b",
+      "prompt": "Use case: illustration-story. Asset: ONE standalone wallpaper for a tiny 240x320 portrait companion screen. Output exactly 768x1024 or another exact portrait 3:4 size. Background artwork only, no characters, no faces, no animals in foreground, no letters, text, UI, borders, logos or watermarks. Large simple flat or gently cel-shaded color shapes, restrained palette of at most 12 dominant colors, no grain, no tiny texture, no fine repetitive lines, no photorealism. It must remain attractive after downsampling to 96x128 and 16 colors. Keep central 65% of width, from 15% to 85% height quiet and low contrast for an expressive face or a large blue-haired whale maid portrait overlay. Top 12% and bottom 18% also calm for translucent UI panels. Environmental accents are sparse and confined mainly to side edges; no central focal subject. Deliver only the image. Theme: A cozy rainy reading nook in pale sage, warm cream and dusty blue. Window mullion at the far left edge and a small warm-lit desk lamp plus a closed book confined to the lower right edge; broad blurred blue-green garden silhouettes beyond the glass. Gentle rainy afternoon, a few large simple raindrop marks only along the edges, serene almost empty light center."
+    }
+  ]
+}
