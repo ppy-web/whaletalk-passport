@@ -45,17 +45,19 @@ DSH 的 AI Passport 连接器、ASR、Agent 与 TTS 继续由电脑端提供。
 
 给机器刷入本应用
 
-安装dsh@0.2.2 alpha版
+安装>= dsh@0.2.2版本
 
 ```bash
-npm install -g @deepseek-ai/dsh@0.2.2-alpha.3
+npm install -g @deepseek-ai/dsh@latest
 ```
 
-安装配套插件
+安装dsh配套插件（内有AI Passport连接器组件）
 
 ```bash
-dsh plugin --profile web add dsh-xiaomi-tts@5.0.0-alpha.2
+dsh plugin --profile web add dsh-xiaomi-tts@latest
 ```
+
+设置好语音识别服务ApiKey（小米，豆包，Breeze）三选一，配置好确认能朗读
 
 1. 在配套插件设置页中，找到并启用AI Passport 连接器。
 2. 在 DSH 中启用语音输入，安装本地识别模型，准备好 ASR、对话模型和 配套插件 TTS 服务商。
