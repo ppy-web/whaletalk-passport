@@ -32,6 +32,11 @@ bool online_fragment(size_t *used, size_t capacity, size_t offset, size_t length
 const char *online_phase_text(online_phase_t phase);
 bool online_session_compatible(const char *version, bool input_audio, bool receipts);
 const char *online_error_text(const char *code);
+bool online_error_recoverable(const char *code);
+typedef struct { char turn[64]; const char *phase; const char *problem; bool settled,waiting; uint64_t since; } online_feedback_t;
+bool online_feedback_progress(online_feedback_t *f,const char *turn,const char *phase,uint64_t now);
+bool online_feedback_result(online_feedback_t *f,const char *turn,const char *result,const char *code);
+void online_feedback_text(const online_feedback_t *f,uint64_t now,char *out,size_t size);
 const char *online_connection_error(int http_status,int socket_error,bool has_ip);
 
 bool online_endpoint_from_ip(const char *ip,char *out,size_t size);

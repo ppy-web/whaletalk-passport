@@ -3,7 +3,7 @@ English · [简体中文](guide.zh_CN.md)
 # 鲸语 · WhaleTalk Passport
 
 AI Passport becomes a voice terminal for the local DSH instance:
-microphone → Wi-Fi → plugin Passport adapter → Host ASR → dedicated Agent
+microphone → Wi-Fi → plugin Passport adapter → selected Host/Xiaomi/Doubao ASR → dedicated Agent
 conversation → plugin TTS → device speaker. No Qwen Audio Agent backend is
 required. The computer must keep DSH running.
 
@@ -38,7 +38,7 @@ hint; holding OK still opens settings.
 
 Thinking cycles through thoughtful, attentive and blinking expressions every
 3.2 seconds, alongside bouncing dots. It remains in the real processing phase
-and DOWN still cancels. This does not shorten Host ASR, model or TTS latency.
+and DOWN still cancels. The animation itself does not shorten recognition, model or TTS latency.
 
 The second settings row (背景) cycles Seaside Tea, Moonlit Dream and an available
 custom background. Selection applies immediately, survives restart and is saved
@@ -82,7 +82,7 @@ still use power; battery-life improvement needs measurement on hardware.
 
 In settings, UP/DOWN select and OK confirms. Reconfiguration needs confirmation;
 cancelling keeps existing settings. Audio uploads only after the user enables
-the microphone, pauses during recognition/thinking/playback, and resumes after
+the microphone. Doubao recognition uploads while capture continues. Capture pauses after local segmentation while waiting for final recognition/thinking/playback, and resumes after
 speaker completion is acknowledged. No automatic voice interruption or acoustic
 echo cancellation is provided. Handle tool approvals in DSH.
 
@@ -143,7 +143,7 @@ C state tests, the firmware gate, LVGL preview and diagnostic helper tests.
 
 ## Connect to local DSH
 
-1. Prepare and separately test Host ASR (such as SenseVoice), the default conversation model and plugin TTS.
+1. Select and test Host ASR (such as SenseVoice) or Xiaomi/Doubao cloud recognition, the default conversation model and plugin TTS.
 The default Agent preset is the plugin’s `whale-girl` (enable the Whale Girl preset component first). The default workspace is `~/.dsh-xiaomi-tts/passport/workspace`, created before a new conversation. Existing conversations keep their preset and directory.
 
 To change presets, choose one from the updated DSH connector's conversation list and click
@@ -196,3 +196,11 @@ compilation or simulations does not establish those results.
 See [NOTICE](../NOTICE) for sources and licenses. Development references:
 [official tutorial](https://ai-passport.folotoy.cn/guides/create-a-play-with-agent/)
 and [Qwen Voice Bean](https://github.com/liutaocode/esp32demo/tree/main/examples/qwen-voice-bean).
+
+## Recognition and feedback
+
+Choose Host, Xiaomi or Doubao recognition in the computer connector, independently of TTS. Xiaomi submits complete utterances; Doubao uploads during speech. Cloud recognition reuses the computer's saved keys and does not require Host ASR. The account still needs ASR access and quota; no provider credentials are stored on the device.
+
+After negotiating `voice.feedback`, the device shows recognition, thinking, tool execution, synthesis and playback stages. After eight seconds in a stage it offers DOWN to cancel. Short speech, empty recognition and turn failures retain a reason and play one local cue at the device volume. Recoverable failures preserve the connection and microphone choice. New valid input clears the reason; cancellation stays quiet. The audio worker suppresses capture around the cue.
+
+Supported TTS models stream after final reply text is ready. An interrupted or overlong stream stops with feedback without replaying spoken audio. The complete conversation text remains in DSH. Older connectors remain compatible with reduced feedback.

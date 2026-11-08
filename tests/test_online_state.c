@@ -54,7 +54,27 @@ static void test_volume_steps(void) {
     assert(online_volume_next(55)==75);
     assert(online_volume_next(101)==0);
 }
+static void test_voice_feedback(void) {
+    online_feedback_t f={0};char text[128];
+    assert(online_feedback_progress(&f,"one","capturing",100));
+    online_feedback_text(&f,10000,text,sizeof(text));assert(!strchr(text,'\n'));
+    assert(online_feedback_progress(&f,"one","recognizing",200));
+    assert(!online_feedback_progress(&f,"other","thinking",300));
+    online_feedback_text(&f,8200,text,sizeof(text));assert(strchr(text,'\n'));
+    assert(online_feedback_result(&f,"one","failed","passport-no-speech"));
+    assert(f.problem && f.settled);
+    assert(!online_feedback_result(&f,"one","failed","passport-no-speech"));
+    assert(!online_feedback_progress(&f,"one","thinking",9000));
+    online_feedback_text(&f,20000,text,sizeof(text));assert(text[0]);
+    assert(online_feedback_progress(&f,"two","capturing",21000) && !f.problem);
+    assert(online_feedback_result(&f,"two","cancelled",""));assert(!f.problem);
+    assert(online_error_recoverable("passport-asr-auth-failed"));
+    assert(online_error_recoverable("passport-recognition-failed"));
+    assert(!online_error_recoverable("passport-protocol-mismatch"));
+    assert(!online_error_recoverable("passport-asr-unavailable"));
+}
 int main(void) {
+    test_voice_feedback();
     assert(online_session_compatible("7.0.0",true,true));
     assert(!online_session_compatible("6.0.0",true,true));
     assert(!online_session_compatible(NULL,true,true));

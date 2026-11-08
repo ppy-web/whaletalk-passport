@@ -61,13 +61,19 @@ static atomic_bool host_busy;
 static char response_id[129];
 static int connection_http,connection_errno;
 static const char *backend_problem;
+static online_feedback_t feedback;
+static atomic_bool cue_pending;
 static void state(online_phase_t p,const char *message) {
     portENTER_CRITICAL(&state_lock);status.phase=p;
+    if(p==ONLINE_ERROR || p==ONLINE_CONNECTING)memset(&feedback,0,sizeof(feedback));
     if(message) snprintf(status.message,sizeof(status.message),"%s",message);
     portEXIT_CRITICAL(&state_lock);
 }
 void online_snapshot(online_status_t *out) {
-    portENTER_CRITICAL(&state_lock);*out=status;portEXIT_CRITICAL(&state_lock);
+    portENTER_CRITICAL(&state_lock);*out=status;
+    out->feedback_visible=feedback.problem || feedback.phase;
+    if(out->feedback_visible)online_feedback_text(&feedback,(uint64_t)(esp_timer_get_time()/1000),out->message,sizeof(out->message));
+    portEXIT_CRITICAL(&state_lock);
     out->mic=atomic_load(&mic);out->volume=atomic_load(&volume);out->level=atomic_load(&level);
     out->linked=atomic_load(&connected) && atomic_load(&ready);
     out->audio_ok=audio_available;
@@ -80,7 +86,10 @@ void online_snapshot(online_status_t *out) {
     out->brightness_save_failed=atomic_load(&brightness_save_failed);
 }
 void online_toggle_mic(void) { if(audio_available) {atomic_store(&mic,!atomic_load(&mic));atomic_fetch_add(&epoch,1);if(!atomic_load(&mic))online_cancel();} }
-void online_cancel(void) { atomic_store(&suppress_audio,true); atomic_fetch_add(&epoch,1); atomic_store(&cancel_pending,true); }
+void online_cancel(void) {
+    portENTER_CRITICAL(&state_lock);feedback.problem=NULL;feedback.phase=NULL;feedback.settled=true;portEXIT_CRITICAL(&state_lock);
+    atomic_store(&cue_pending,false);atomic_store(&suppress_audio,true);atomic_fetch_add(&epoch,1);atomic_store(&cancel_pending,true);
+}
 void online_volume(void) { atomic_store(&volume_pending,true); }
 void online_setup(void) { atomic_store(&setup_pending,true); }
 void online_cycle_theme(void) {
@@ -247,10 +256,30 @@ static void receive_message(void) {
         atomic_store(&suppress_audio,true);
         response_id[0]=0;
         atomic_fetch_add(&epoch,1);
+    } else if(!strcmp(type,"voice.progress") && atomic_load(&ready)) {
+        portENTER_CRITICAL(&state_lock);
+        online_feedback_progress(&feedback,string(j,"turnId"),string(j,"phase"),(uint64_t)(esp_timer_get_time()/1000));
+        portEXIT_CRITICAL(&state_lock);
+    } else if(!strcmp(type,"voice.result") && atomic_load(&ready)) {
+        portENTER_CRITICAL(&state_lock);
+        bool accepted=online_feedback_result(&feedback,string(j,"turnId"),string(j,"status"),string(j,"code"));
+        bool problem=accepted && feedback.problem;
+        portEXIT_CRITICAL(&state_lock);
+        if(accepted) {
+            if(problem)atomic_store(&cue_pending,true);
+            atomic_store(&host_busy,false);atomic_store(&suppress_audio,true);atomic_fetch_add(&epoch,1);response_id[0]=0;
+            state(atomic_load(&mic)?ONLINE_LISTENING:ONLINE_READY,NULL);
+        }
     } else if(!strcmp(type,"error")) {
         /* Never display arbitrary server messages: they can include private data. */
-        backend_problem=online_error_text(string(j,"code"));
-        fail(backend_problem);
+        const char *code=string(j,"code");
+        if(atomic_load(&ready) && online_error_recoverable(code)) {
+            portENTER_CRITICAL(&state_lock);
+            feedback.problem=online_error_text(code);feedback.phase=NULL;feedback.settled=true;
+            portEXIT_CRITICAL(&state_lock);
+            atomic_store(&cue_pending,true);atomic_store(&host_busy,false);atomic_store(&suppress_audio,true);atomic_fetch_add(&epoch,1);
+            state(atomic_load(&mic)?ONLINE_LISTENING:ONLINE_READY,NULL);
+        } else {backend_problem=online_error_text(code);fail(backend_problem);}
     }
     cJSON_Delete(j);
 }
@@ -335,6 +364,7 @@ static void send_hello(void) {
     cJSON *caps=cJSON_AddArrayToObject(j,"capabilities");
     cJSON_AddItemToArray(caps,cJSON_CreateString("input.audio"));
     cJSON_AddItemToArray(caps,cJSON_CreateString("playback.receipts"));
+    cJSON_AddItemToArray(caps,cJSON_CreateString("voice.feedback"));
     cJSON_AddStringToObject(j,"locale","zh-CN");cJSON_AddStringToObject(j,"time_zone","Asia/Shanghai");
     cJSON *connection=cJSON_AddObjectToObject(j,"connection");
     cJSON_AddBoolToObject(connection,"voice_enabled",true);cJSON_AddBoolToObject(connection,"input_enabled",atomic_load(&mic));
@@ -360,6 +390,23 @@ static void audio_task(void *arg) {
         }
         if(active[0] && (active_epoch!=atomic_load(&epoch) || !atomic_load(&ready))) {
             receipt("playback.cancelled",active);active[0]=0;quiet_until=esp_timer_get_time()+600000;applied_volume=-1;
+        }
+        /* This worker owns both the cue and the codec. No online TTS or heap allocation. */
+        if(!active[0] && atomic_exchange(&cue_pending,false) && audio_available) {
+            static int16_t cue[160];
+            if(format!=16000) { if(bsp_audio_set_format(16000,16,1)!=ESP_OK){fail("扬声器不可用");continue;}format=16000; }
+            bsp_audio_set_volume(atomic_load(&volume));applied_volume=(int)atomic_load(&volume);
+            for(unsigned block=0;block<8;block++) {
+                for(unsigned i=0;i<160;i++) {
+                    unsigned at=block*160+i;
+                    int envelope=(int)(at<160?at:at>1120?1280-at:160);
+                    int triangle=(int)(at%20);triangle=triangle<10?triangle:20-triangle;
+                    cue[i]=(int16_t)((triangle-5)*envelope*4);
+                }
+                if(bsp_audio_write((uint8_t *)cue,sizeof(cue))!=ESP_OK)break;
+            }
+            for(unsigned i=0;i<6;i++)if(bsp_audio_write(silence,sizeof(silence))!=ESP_OK)break;
+            quiet_until=esp_timer_get_time()+600000;continue;
         }
         /* Reuse the existing queue for about 300 ms of starting audio. This
          * absorbs provider/network jitter without allocating another buffer. */

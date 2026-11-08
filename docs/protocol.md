@@ -21,7 +21,7 @@ Microphone input is PCM16LE mono 16,000 Hz in base64
 `input_audio_buffer.append` messages. The Host performs segmentation and ASR.
 Mute/unmute, wake and `response.cancel` are control events.
 
-The Host produces the complete reply WAV and converts to PCM16LE mono 24,000 Hz.
+After final reply text is ready, supported Host providers stream PCM16LE mono 24,000 Hz; other models convert the complete WAV.
 `response.started` defines `responseId`; matching `audio.delta` messages carry
 `sampleRate` and base64 PCM, followed by `audio.done`. The device fences stale
 responses and acknowledges `playback.started`, `playback.ended` or
@@ -63,3 +63,12 @@ blob or partition migration. `brightness` accepts 25, 50, 75 or 100; missing
 or invalid values default to 100. Backlight sleep uses 0 without overwriting
 the preference. Thinking animation is local presentation; it neither changes
 `voice.state`, acknowledges audio early, nor shortens Host processing time.
+
+## Optional voice feedback
+
+The device advertises `voice.feedback`; the connector echoes it only when supported.
+`voice.progress` carries `turnId` and `phase` (`capturing`, `recognizing`, `thinking`, `tool`, `synthesizing`, `playing`). Capturing does not pause the microphone. `voice.result` carries the same `turnId`, a status (`completed`, `cancelled`, `failed`) and an optional stable `code`. Duplicate terminal results and stale progress for settled turns are ignored.
+
+Failure explanations persist across ordinary listening updates until new valid input, a user action or connection failure. Turn failures preserve the microphone and transport, invalidate old playback and schedule one local cue. Arbitrary server prose is never rendered. Fatal protocol/transport failures retain the reconnect path. Legacy recoverable `error` codes are handled locally without requiring new feedback events.
+
+Streaming keeps one response ID through all chunks and waits for `playback.ended`. A partial synthesis failure or duration limit clears queued playback and reports failure, never successful delivery or automatic replay.

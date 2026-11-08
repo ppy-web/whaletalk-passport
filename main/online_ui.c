@@ -146,7 +146,7 @@ static void refresh(lv_timer_t *timer) {
     visibility(face_layer,home && !setup && !whale);visibility(whale_layer,home && !setup && whale);
     /* Normal phases belong to the character and icons; actionable faults keep
      * their explanation, including audio errors reported in the ready phase. */
-    bool detail=s.phase==ONLINE_ERROR || s.phase==ONLINE_CONNECTING ||
+    bool detail=s.feedback_visible || s.phase==ONLINE_THINKING || s.phase==ONLINE_ERROR || s.phase==ONLINE_CONNECTING ||
         (s.phase==ONLINE_READY && !s.audio_ok);
     visibility(caption,home && !setup && detail);visibility(setup_panel,home && setup);
     visibility(phase_icon.obj,home && !setup && !detail && (s.phase!=ONLINE_READY || s.mic));

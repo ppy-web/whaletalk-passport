@@ -54,7 +54,61 @@ const char *online_error_text(const char *code) {
     if(!strcmp(code,"passport-request-timeout"))return "等待超时，请重新说话";
     if(!strcmp(code,"passport-session-unavailable") || !strcmp(code,"passport-preset-unavailable"))return "请检查 DSH 对话配置";
     if(!strcmp(code,"passport-preset-changed"))return "请在 DSH 刷新预设";
+    if(!strcmp(code,"passport-speech-too-short"))return "说话太短，请再说一次";
+    if(!strcmp(code,"passport-no-speech"))return "没有听清，请再说一次";
+    if(!strcmp(code,"passport-no-reply"))return "本轮没有可朗读的回复";
+    if(!strcmp(code,"passport-turn-failed"))return "对话失败，请重新提问";
+    if(!strcmp(code,"passport-reply-too-long"))return "回复超出时长，请提问短一些";
+    if(!strcmp(code,"passport-playback-failed"))return "播音中断，请重新提问";
+    if(!strcmp(code,"passport-asr-key-required"))return "请在 DSH 配置识别密钥";
+    if(!strcmp(code,"passport-asr-auth-failed"))return "识别密钥无效，请检查 DSH";
+    if(!strcmp(code,"passport-asr-permission-denied"))return "请先开通所选语音识别服务";
+    if(!strcmp(code,"passport-asr-quota-exceeded"))return "识别额度不足，请检查账户";
+    if(!strcmp(code,"passport-asr-rate-limited"))return "识别请求过多，请稍后再试";
+    if(!strcmp(code,"passport-asr-timeout"))return "识别超时，请重新说话";
+    if(!strcmp(code,"passport-asr-network-failed"))return "识别网络异常，请重试";
+    if(!strcmp(code,"passport-recording-too-long"))return "录音太长，请分开说";
     return "后端错误，请检查服务配置";
+}
+
+bool online_error_recoverable(const char *code) {
+    static const char *const codes[]={"passport-recognition-failed","passport-speech-failed","passport-request-timeout",
+        "passport-no-speech","passport-no-reply","passport-turn-failed","passport-reply-too-long",
+        "passport-playback-failed","passport-speech-too-short","passport-recording-too-long"};
+    if(!code)return false;
+    if(!strncmp(code,"passport-asr-",13) && strcmp(code,"passport-asr-unavailable"))return true;
+    for(unsigned i=0;i<sizeof(codes)/sizeof(codes[0]);i++)if(!strcmp(code,codes[i]))return true;
+    return false;
+}
+bool online_feedback_progress(online_feedback_t *f,const char *turn,const char *phase,uint64_t now) {
+    if(!turn || !*turn || strlen(turn)>=sizeof(f->turn))return false;
+    const char *label=NULL;
+    if(!strcmp(phase,"capturing"))label="正在收音";
+    if(!strcmp(phase,"recognizing"))label="正在识别";
+    if(!strcmp(phase,"thinking"))label="正在思考";
+    if(!strcmp(phase,"tool"))label="正在执行工具";
+    if(!strcmp(phase,"synthesizing"))label="正在合成语音";
+    if(!strcmp(phase,"playing"))label="正在回答";
+    if(!label)return false;
+    if(!strcmp(f->turn,turn) && f->settled)return false;
+    if(f->turn[0] && !f->settled && strcmp(f->turn,turn))return false;
+    if(strcmp(f->turn,turn) || f->phase!=label)f->since=now;
+    snprintf(f->turn,sizeof(f->turn),"%s",turn);f->phase=label;f->problem=NULL;f->settled=false;
+    f->waiting=strcmp(phase,"capturing") && strcmp(phase,"playing");
+    return true;
+}
+bool online_feedback_result(online_feedback_t *f,const char *turn,const char *result,const char *code) {
+    if(!turn || !*turn || strlen(turn)>=sizeof(f->turn))return false;
+    if(!strcmp(f->turn,turn) && f->settled)return false;
+    if(f->turn[0] && !f->settled && strcmp(f->turn,turn))return false;
+    if(strcmp(result,"failed") && strcmp(result,"completed") && strcmp(result,"cancelled"))return false;
+    snprintf(f->turn,sizeof(f->turn),"%s",turn);f->phase=NULL;f->settled=true;
+    f->problem=!strcmp(result,"failed")?online_error_text(code):NULL;
+    return true;
+}
+void online_feedback_text(const online_feedback_t *f,uint64_t now,char *out,size_t size) {
+    snprintf(out,size,"%s",f->problem?f->problem:f->phase?f->phase:"");
+    if(f->phase && f->waiting && now-f->since>=8000)snprintf(out,size,"%s\n耗时较长，按下键可取消",f->phase);
 }
 
 const char *online_connection_error(int http_status,int socket_error,bool has_ip) {

@@ -110,11 +110,16 @@ int main(void) {
             char name[48];snprintf(name,sizeof(name),"%s-%s",theme==ONLINE_THEME_WHALE?"whale":"mint",names[i]);snap(name);
             assert(lv_obj_has_flag(whale_layer,LV_OBJ_FLAG_HIDDEN)==(i==ONLINE_SETUP || theme!=ONLINE_THEME_WHALE));
             assert(lv_obj_has_flag(face_layer,LV_OBJ_FLAG_HIDDEN)==(i==ONLINE_SETUP || theme!=ONLINE_THEME_MINT));
-            assert(lv_obj_has_flag(caption,LV_OBJ_FLAG_HIDDEN)==(i!=ONLINE_ERROR && i!=ONLINE_CONNECTING));
+            assert(lv_obj_has_flag(caption,LV_OBJ_FLAG_HIDDEN)==(i!=ONLINE_ERROR && i!=ONLINE_CONNECTING && i!=ONLINE_THINKING));
             assert(lv_obj_has_flag(home_controls,LV_OBJ_FLAG_HIDDEN)==(i==ONLINE_SETUP));
         }
     }
-    fixture.theme=ONLINE_THEME_WHALE;fixture.phase=ONLINE_THINKING;fixture.mic=true;
+    fixture.theme=ONLINE_THEME_WHALE;fixture.phase=ONLINE_LISTENING;fixture.mic=true;fixture.feedback_visible=true;
+    snprintf(fixture.message,sizeof(fixture.message),"%s",online_error_text("passport-no-speech"));refresh(NULL);snap("recognition-error");
+    assert(!lv_obj_has_flag(caption,LV_OBJ_FLAG_HIDDEN));
+    fixture.phase=ONLINE_THINKING;
+    snprintf(fixture.message,sizeof(fixture.message),"正在识别\n耗时较长，按下键可取消");refresh(NULL);snap("recognition-slow");
+    fixture.feedback_visible=false;
     for(unsigned i=0;i<32;i++) {
         clock_us=(int64_t)i*100000;refresh(NULL);
         char name[48];snprintf(name,sizeof(name),"thinking-animation-%02u",i);snap(name);
