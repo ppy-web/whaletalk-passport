@@ -33,6 +33,7 @@ hint; holding OK still opens settings.
 | --- | --- |
 | Short OK | Toggle microphone; initially closed |
 | Short UP | Cycle 0, 25, 50, 75, 90, 100%; 0 mutes |
+| Hold UP | Toggle interface hints, including from settings |
 | Short DOWN | Cancel recognition, generation or playback |
 | Hold DOWN | Speak while holding; release to send |
 | Hold OK | Open settings; hold again to return home |

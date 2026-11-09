@@ -242,6 +242,7 @@ online_avatar_t online_avatar_frame(online_phase_t phase,bool mic,unsigned level
 }
 
 online_action_t online_menu_key(online_menu_t *m,online_key_t key) {
+    if(key==ONLINE_KEY_UP_LONG)return ONLINE_ACTION_OVERLAY;
     if(key==ONLINE_KEY_LONG) {
         m->page=m->page==ONLINE_HOME?ONLINE_SETTINGS:ONLINE_HOME;m->selected=0;
         return ONLINE_ACTION_NONE;

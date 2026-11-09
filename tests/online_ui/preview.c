@@ -221,6 +221,13 @@ int main(void) {
     online_ui_key(BSP_BTN_OK,BSP_BTN_PRESS);assert(!toggles);
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(toggles==1);
     online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);refresh(NULL);assert(volumes==1);
+    online_ui_key(BSP_BTN_UP,BSP_BTN_PRESS);
+    online_ui_key(BSP_BTN_UP,BSP_BTN_LONG);refresh(NULL);assert(!fixture.overlay);
+    online_ui_key(BSP_BTN_UP,BSP_BTN_RELEASE);
+    online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);refresh(NULL);assert(volumes==1 && !fixture.overlay);
+    online_ui_key(BSP_BTN_UP,BSP_BTN_PRESS);
+    online_ui_key(BSP_BTN_UP,BSP_BTN_LONG);refresh(NULL);assert(fixture.overlay);
+    online_ui_key(BSP_BTN_UP,BSP_BTN_RELEASE);online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);
     unsigned before_cancel=cancels;
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);assert(cancels==before_cancel+1);
     before_cancel=cancels;
@@ -294,6 +301,11 @@ int main(void) {
     assert(lv_obj_has_flag(header,LV_OBJ_FLAG_HIDDEN) && lv_obj_has_flag(home_controls,LV_OBJ_FLAG_HIDDEN));
     assert(lv_obj_has_flag(caption,LV_OBJ_FLAG_HIDDEN));snap("home-clean");
     online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);
+    online_ui_key(BSP_BTN_UP,BSP_BTN_PRESS);online_ui_key(BSP_BTN_UP,BSP_BTN_LONG);refresh(NULL);
+    assert(fixture.overlay && menu.page==ONLINE_SETTINGS);
+    online_ui_key(BSP_BTN_UP,BSP_BTN_PRESS);online_ui_key(BSP_BTN_UP,BSP_BTN_LONG);refresh(NULL);
+    assert(!fixture.overlay && menu.page==ONLINE_SETTINGS);
+    online_ui_key(BSP_BTN_UP,BSP_BTN_RELEASE);online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);
     online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);refresh(NULL);
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);snap("confirm");assert(setups==0);
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(setups==0 && menu.page==ONLINE_SETTINGS);
@@ -322,6 +334,12 @@ int main(void) {
     online_ui_key(BSP_BTN_OK,BSP_BTN_PRESS);refresh(NULL);
     online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);assert(menu.page==ONLINE_HOME);
     online_ui_key(BSP_BTN_OK,BSP_BTN_RELEASE);
+    clock_us+=60000000;refresh(NULL);assert(backlight==0);
+    bool overlay_before_wake=fixture.overlay;
+    online_ui_key(BSP_BTN_UP,BSP_BTN_PRESS);refresh(NULL);assert(backlight==100);
+    online_ui_key(BSP_BTN_UP,BSP_BTN_LONG);online_ui_key(BSP_BTN_UP,BSP_BTN_RELEASE);
+    online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);refresh(NULL);
+    assert(fixture.overlay==overlay_before_wake && volumes==previous_volumes);
     online_ui_key(BSP_BTN_OK,BSP_BTN_PRESS);
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(toggles==previous_toggles+1);
     clock_us+=60000000;refresh(NULL);assert(backlight==0);

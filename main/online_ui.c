@@ -386,8 +386,9 @@ void online_ui_enter(bool buttons_ok) {
 void online_ui_key(bsp_btn_t key,bsp_btn_ev_t ev) {
     /* This callback owns the gesture flag. RELEASE precedes CLICK, so retain it
      * until the next PRESS and suppress both short and long wake gestures. */
-    static bool wake_gesture,down_home,down_long;
+    static bool wake_gesture,down_home,down_long,up_long;
     if(ev==BSP_BTN_PRESS) {
+        if(key==BSP_BTN_UP)up_long=false;
         wake_gesture=atomic_load(&screen_asleep);
         atomic_store(&pending_activity,true);
         if(key==BSP_BTN_DOWN) {
@@ -402,8 +403,11 @@ void online_ui_key(bsp_btn_t key,bsp_btn_ev_t ev) {
         if(ev==BSP_BTN_CLICK) {down_home=false;down_long=false;return;}
     }
     if(key==BSP_BTN_DOWN && down_long && ev==BSP_BTN_CLICK) {down_long=false;return;}
+    if(key==BSP_BTN_UP && ev==BSP_BTN_LONG)up_long=true;
+    if(key==BSP_BTN_UP && ev==BSP_BTN_CLICK && up_long) {up_long=false;return;}
     unsigned command=0;
     if(ev==BSP_BTN_LONG && key==BSP_BTN_OK)command=ONLINE_KEY_LONG;
+    else if(ev==BSP_BTN_LONG && key==BSP_BTN_UP)command=ONLINE_KEY_UP_LONG;
     else if(ev==BSP_BTN_CLICK)command=key==BSP_BTN_OK?ONLINE_KEY_OK:key==BSP_BTN_UP?ONLINE_KEY_UP:ONLINE_KEY_DOWN;
     /* Button callbacks never touch LVGL. Consume one action on its task. */
     if(command) {

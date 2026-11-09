@@ -56,7 +56,7 @@ bool online_endpoint_from_ip(const char *ip,char *out,size_t size);
 bool online_endpoint_from_ip_port(const char *ip,unsigned port,char *out,size_t size);
 
 typedef enum { ONLINE_HOME, ONLINE_SETTINGS, ONLINE_DISPLAY, ONLINE_CONNECTION, ONLINE_CONFIRM } online_page_t;
-typedef enum { ONLINE_KEY_OK=1, ONLINE_KEY_UP, ONLINE_KEY_DOWN, ONLINE_KEY_LONG } online_key_t;
+typedef enum { ONLINE_KEY_OK=1, ONLINE_KEY_UP, ONLINE_KEY_DOWN, ONLINE_KEY_LONG, ONLINE_KEY_UP_LONG } online_key_t;
 typedef enum { ONLINE_ACTION_NONE, ONLINE_ACTION_MIC, ONLINE_ACTION_VOLUME,
     ONLINE_ACTION_CANCEL, ONLINE_ACTION_SETUP, ONLINE_ACTION_THEME, ONLINE_ACTION_IDLE,
     ONLINE_ACTION_BACKGROUND, ONLINE_ACTION_BRIGHTNESS, ONLINE_ACTION_OVERLAY, ONLINE_ACTION_CUE } online_action_t;
