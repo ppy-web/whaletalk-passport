@@ -2,6 +2,7 @@
 #include "online_setup.h"
 #include "online_theme.h"
 #include "online_background.h"
+#include "online_cue.h"
 #include "bsp_audio.h"
 #include "esp_websocket_client.h"
 #include "esp_crt_bundle.h"
@@ -30,10 +31,20 @@
 #define PCM_BYTES 640
 #define FRAME_MAX 16384
 /* Fixed queue budget ~30 KB, one bounded JSON frame <16 KB. */
-typedef struct { unsigned epoch,rate; size_t len; bool done; char id[129]; uint8_t pcm[PCM_BYTES]; } playback_t;
+typedef struct { unsigned epoch,rate; size_t len; bool done,ptt; char id[129]; uint8_t pcm[PCM_BYTES]; } playback_t;
 typedef struct { size_t len; unsigned epoch; uint8_t pcm[PCM_BYTES]; } capture_t;
 typedef struct { char type[32],id[129]; } receipt_t;
 static QueueHandle_t playback,capture,receipts;
+/* Playback and push-to-talk are mutually exclusive and reuse the 32-frame queue. */
+static online_ptt_control_t ptt;
+#define ptt_mode ptt.mode
+#define ptt_sequence ptt.sequence
+#define ptt_ack ptt.ack
+#define ptt_problem ptt.problem
+#define ptt_supported ptt.supported
+#define ptt_reply ptt.reply
+#define ptt_capture_stopped ptt.capture_stopped
+#define ptt_audio_started ptt.audio_started
 static portMUX_TYPE state_lock=portMUX_INITIALIZER_UNLOCKED;
 static online_status_t status={.phase=ONLINE_CONNECTING,.volume=75};
 static atomic_bool mic,ready,connected,got_ip,hello_pending,cancel_pending,setup_pending,volume_pending,fault;
@@ -47,6 +58,10 @@ static atomic_uint selected_background=ONLINE_BACKGROUND_DAY,background_revision
 static atomic_bool background_save_failed;
 static atomic_uint selected_brightness=100,brightness_revision;
 static atomic_bool brightness_save_failed;
+static atomic_bool overlay=true,overlay_save_failed;
+static atomic_uint overlay_revision;
+static atomic_bool cues_enabled=true,cues_save_failed,ptt_wait_cue,ptt_long_gesture;
+static atomic_uint cues_revision;
 static atomic_bool suppress_audio;
 static esp_websocket_client_handle_t gateway_socket;
 static char *frame;
@@ -57,12 +72,31 @@ static uint32_t serial;
 static bool audio_available;
 /* Only the websocket event task mutates negotiation. Reconnects start afresh. */
 static bool negotiated;
-static atomic_bool host_busy;
+static atomic_bool host_busy,host_capturing;
 static char response_id[129];
 static int connection_http,connection_errno;
 static const char *backend_problem;
 static online_feedback_t feedback;
-static atomic_bool cue_pending;
+static portMUX_TYPE cue_lock=portMUX_INITIALIZER_UNLOCKED;
+static online_cue_queue_t cue_queue;
+static uint64_t cue_connection_at[2];
+static void cue_clear(void) {portENTER_CRITICAL(&cue_lock);online_cue_clear(&cue_queue);portEXIT_CRITICAL(&cue_lock);}
+static void cue_request(online_cue_t kind) {
+    if(!audio_available || !atomic_load(&cues_enabled) || !atomic_load(&volume))return;
+    uint64_t now=(uint64_t)(esp_timer_get_time()/1000);
+    portENTER_CRITICAL(&cue_lock);
+    if(kind==CUE_CONNECTED || kind==CUE_DISCONNECTED) {
+        unsigned index=kind==CUE_CONNECTED?0:1;
+        if(cue_connection_at[index] && now+1-cue_connection_at[index]<10000) {portEXIT_CRITICAL(&cue_lock);return;}
+        cue_connection_at[index]=now+1;
+    }
+    online_cue_push(&cue_queue,kind,now);
+    portEXIT_CRITICAL(&cue_lock);
+}
+static bool cue_next(online_cue_t *kind) {
+    uint64_t now=(uint64_t)(esp_timer_get_time()/1000);
+    portENTER_CRITICAL(&cue_lock);bool found=online_cue_pop(&cue_queue,now,kind);portEXIT_CRITICAL(&cue_lock);return found;
+}
 static void state(online_phase_t p,const char *message) {
     portENTER_CRITICAL(&state_lock);status.phase=p;
     if(p==ONLINE_ERROR || p==ONLINE_CONNECTING)memset(&feedback,0,sizeof(feedback));
@@ -71,9 +105,20 @@ static void state(online_phase_t p,const char *message) {
 }
 void online_snapshot(online_status_t *out) {
     portENTER_CRITICAL(&state_lock);*out=status;
-    out->feedback_visible=feedback.problem || feedback.phase;
-    if(out->feedback_visible)online_feedback_text(&feedback,(uint64_t)(esp_timer_get_time()/1000),out->message,sizeof(out->message));
+    char feedback_text[sizeof(out->message)];
+    online_feedback_text(&feedback,(uint64_t)(esp_timer_get_time()/1000),feedback_text,sizeof(feedback_text));
+    out->feedback_visible=feedback_text[0]!='\0';
+    if(out->feedback_visible)snprintf(out->message,sizeof(out->message),"%s",feedback_text);
     portEXIT_CRITICAL(&state_lock);
+    unsigned mode=atomic_load(&ptt_mode),problem=atomic_load(&ptt_problem);
+    out->ptt_recording=mode==PTT_ACTIVE;
+    if(mode==PTT_ACTIVE || mode==PTT_DRAINING || problem) {
+        const char *message=mode==PTT_DRAINING?"正在发送语音":mode==PTT_ACTIVE?
+            (atomic_load(&ptt_audio_started)?"正在录音，松开发送":"准备录音，请继续按住"):
+            problem==1?"连接器不支持对讲":problem==2?"对讲不可用，请检查连接":
+            problem==3?"录音拥塞，请重新说话":"没有听清，请再说一次";
+        snprintf(out->message,sizeof(out->message),"%s",message);out->feedback_visible=true;
+    }
     out->mic=atomic_load(&mic);out->volume=atomic_load(&volume);out->level=atomic_load(&level);
     out->linked=atomic_load(&connected) && atomic_load(&ready);
     out->audio_ok=audio_available;
@@ -84,11 +129,39 @@ void online_snapshot(online_status_t *out) {
     out->background_save_failed=atomic_load(&background_save_failed);
     out->brightness=online_brightness_normalize(atomic_load(&selected_brightness));
     out->brightness_save_failed=atomic_load(&brightness_save_failed);
+    out->overlay=atomic_load(&overlay);out->overlay_save_failed=atomic_load(&overlay_save_failed);
+    out->cues=atomic_load(&cues_enabled);out->cues_save_failed=atomic_load(&cues_save_failed);
 }
-void online_toggle_mic(void) { if(audio_available) {atomic_store(&mic,!atomic_load(&mic));atomic_fetch_add(&epoch,1);if(!atomic_load(&mic))online_cancel();} }
+void online_toggle_mic(void) { if(audio_available) {bool next=!atomic_load(&mic);atomic_store(&mic,next);atomic_fetch_add(&epoch,1);if(!next)online_cancel();cue_request(next?CUE_MIC_ON:CUE_MIC_OFF);} }
 void online_cancel(void) {
     portENTER_CRITICAL(&state_lock);feedback.problem=NULL;feedback.phase=NULL;feedback.settled=true;portEXIT_CRITICAL(&state_lock);
-    atomic_store(&cue_pending,false);atomic_store(&suppress_audio,true);atomic_fetch_add(&epoch,1);atomic_store(&cancel_pending,true);
+    cue_clear();atomic_store(&host_capturing,false);atomic_store(&suppress_audio,true);atomic_store(&ptt_reply,false);atomic_store(&ptt_problem,0);atomic_fetch_add(&epoch,1);atomic_store(&cancel_pending,true);
+}
+void online_ptt_press(void) {
+    online_cancel();
+    atomic_store(&ptt_long_gesture,false);
+    if(!playback || !audio_available || !atomic_load(&ready) || !atomic_load(&ptt_supported))return;
+    atomic_store(&ptt_mode,PTT_FAILED);
+    xQueueReset(playback);
+    atomic_store(&ptt_wait_cue,atomic_load(&cues_enabled) && atomic_load(&volume)>0);
+    online_ptt_arm_state(&ptt);
+}
+void online_ptt_start(void) {
+    atomic_store(&ptt_long_gesture,true);
+    online_ptt_start_state(&ptt,atomic_load(&ready));
+    if(atomic_load(&ptt_mode)!=PTT_ACTIVE)cue_request(CUE_ERROR);
+}
+void online_ptt_release(void) {
+    bool held=atomic_exchange(&ptt_long_gesture,false);
+    if(!held)cue_request(CUE_CANCEL);
+    else if(online_ptt_release_waiting(&ptt,atomic_load(&ptt_wait_cue))) {
+        online_cancel();return;
+    }
+    else if(atomic_load(&ptt_mode)==PTT_FAILED)cue_request(CUE_ERROR);
+    online_ptt_release_state(&ptt);
+}
+void online_ptt_abort(void) {
+    if(atomic_exchange(&ptt_mode,PTT_IDLE)!=PTT_IDLE)online_cancel();
 }
 void online_volume(void) { atomic_store(&volume_pending,true); }
 void online_setup(void) { atomic_store(&setup_pending,true); }
@@ -115,8 +188,19 @@ void online_cycle_brightness(void) {
     atomic_store(&brightness_save_failed,!atomic_load(&theme_storage_available));
     atomic_fetch_add(&brightness_revision,1);
 }
+void online_toggle_overlay(void) {
+    bool value=atomic_load(&overlay);
+    while(!atomic_compare_exchange_weak(&overlay,&value,!value)) {}
+    atomic_store(&overlay_save_failed,!atomic_load(&theme_storage_available));atomic_fetch_add(&overlay_revision,1);
+}
+void online_toggle_cues(void) {
+    bool value=atomic_load(&cues_enabled);
+    while(!atomic_compare_exchange_weak(&cues_enabled,&value,!value)) {}
+    atomic_store(&cues_save_failed,!atomic_load(&theme_storage_available));atomic_fetch_add(&cues_revision,1);
+    if(value)cue_clear();else cue_request(CUE_VOLUME);
+}
 static void theme_task(void *arg) {
-    (void)arg;unsigned saved_revision=0,saved_idle_revision=0,saved_background_revision=0,saved_brightness_revision=0;
+    (void)arg;unsigned saved_revision=0,saved_idle_revision=0,saved_background_revision=0,saved_brightness_revision=0,saved_overlay_revision=0,saved_cues_revision=0;
     for(;;) {
         unsigned revision=atomic_load(&theme_revision),idle_changed=atomic_load(&idle_revision),
             background_changed=atomic_load(&background_revision),brightness_changed=atomic_load(&brightness_revision);
@@ -145,12 +229,26 @@ static void theme_task(void *arg) {
             if(!ok)ESP_LOGW("whale_theme","brightness preference persistence failed");
             saved_brightness_revision=brightness_changed;
         }
+        unsigned overlay_changed=atomic_load(&overlay_revision);
+        if(overlay_changed!=saved_overlay_revision && snapshot.phase!=ONLINE_SPEAKING && snapshot.phase!=ONLINE_THINKING) {
+            bool ok=online_overlay_save(snapshot.overlay);
+            atomic_store(&overlay_save_failed,!ok);
+            if(!ok)ESP_LOGW("whale_theme","overlay preference persistence failed");
+            saved_overlay_revision=overlay_changed;
+        }
+        unsigned cues_changed=atomic_load(&cues_revision);
+        if(cues_changed!=saved_cues_revision && snapshot.phase!=ONLINE_SPEAKING && snapshot.phase!=ONLINE_THINKING) {
+            bool ok=online_cues_save(snapshot.cues);
+            atomic_store(&cues_save_failed,!ok);saved_cues_revision=cues_changed;
+            if(!ok)ESP_LOGW("whale_theme","cue preference persistence failed");
+        }
         vTaskDelay(pdMS_TO_TICKS(150));
     }
 }
 static void fail(const char *why) {
     ESP_LOGE("bean_network","%s",why);
-    atomic_store(&ready,false);atomic_store(&mic,false);atomic_store(&fault,true);
+    atomic_store(&ready,false);atomic_store(&mic,false);atomic_store(&fault,true);atomic_store(&host_capturing,false);
+    atomic_store(&ptt_supported,false);atomic_store(&ptt_reply,false);atomic_store(&ptt_mode,PTT_IDLE);
     atomic_fetch_add(&epoch,1);state(ONLINE_ERROR,why);
 }
 /* A transient transport failure must not change the user's microphone choice.
@@ -158,7 +256,8 @@ static void fail(const char *why) {
  * an explicit restart when a send fails while it still reports connected. */
 static void recover_transport(void) {
     bool was_connected=atomic_exchange(&connected,false);
-    atomic_store(&ready,false);
+    if(atomic_exchange(&ready,false))cue_request(CUE_DISCONNECTED);
+    atomic_store(&host_capturing,false);
     atomic_fetch_add(&epoch,1);
     if(was_connected)atomic_store(&fault,true);
     ESP_LOGW("bean_network","recovering transport; mic=%d restart=%d",atomic_load(&mic),was_connected);
@@ -181,20 +280,24 @@ static void receive_message(void) {
     const char *type=string(j,"type");
     if(!strcmp(type,"session.ready")) {
         cJSON *caps=cJSON_GetObjectItemCaseSensitive(j,"capabilities"),*cap;
-        bool input=false,ack=false;
+        bool input=false,ack=false,has_ptt=false;
         cJSON_ArrayForEach(cap,caps)if(cJSON_IsString(cap)) {
             if(!strcmp(cap->valuestring,"input.audio"))input=true;
             if(!strcmp(cap->valuestring,"playback.receipts"))ack=true;
+            if(!strcmp(cap->valuestring,"input.push_to_talk"))has_ptt=true;
         }
         negotiated=online_session_compatible(string(j,"protocol_version"),input,ack);
+        atomic_store(&ptt_supported,negotiated && has_ptt);
         if(!negotiated)fail("后端协议版本不兼容");
     } else if(!strcmp(type,"voice.ready")) {
         if(!negotiated || number(j,"inputSampleRate")!=16000 || number(j,"outputSampleRate")!=24000)fail("后端音频格式不支持");
-        else {atomic_store(&ready,true);state(atomic_load(&mic)?ONLINE_LISTENING:ONLINE_READY,audio_available?(atomic_load(&mic)?"我在认真听":"确定：开始对话"):"音频不可用，请检查设备");}
+        else {if(!atomic_exchange(&ready,true))cue_request(CUE_CONNECTED);state(atomic_load(&mic)?ONLINE_LISTENING:ONLINE_READY,audio_available?(atomic_load(&mic)?"我在认真听":"确定：开始对话"):"音频不可用，请检查设备");}
     } else if(!strcmp(type,"voice.connection") && !strcmp(string(j,"state"),"unavailable")) {
         /* Gateway owns provider reconnection. Keep this client/session and the
          * user's mic setting when an idle provider connection is recycled. */
-        atomic_store(&ready,false);atomic_fetch_add(&epoch,1);
+        if(atomic_exchange(&ready,false))cue_request(CUE_DISCONNECTED);
+        atomic_store(&host_capturing,false);
+        atomic_fetch_add(&epoch,1);
         if(*string(j,"message")) {
             atomic_store(&mic,false);state(ONLINE_ERROR,"语音服务不可用，请检查后端");
         } else {
@@ -209,6 +312,7 @@ static void receive_message(void) {
         const char *v=string(j,"state");
         if(!strcmp(v,"listening")) {
             atomic_store(&host_busy,false);
+            atomic_store(&host_capturing,false);
             atomic_store(&suppress_audio,true);
             response_id[0]=0;
             state(atomic_load(&mic)?ONLINE_LISTENING:ONLINE_READY,atomic_load(&mic)?"我在认真听":"按确定开麦");
@@ -220,13 +324,24 @@ static void receive_message(void) {
             response_id[0]=0;
             state(ONLINE_THINKING,"正在请教 DSH");
         }
+    } else if(!strcmp(type,"voice.ptt.started")) {
+        unsigned sequence=atomic_load(&ptt_sequence);
+        char expected[16];snprintf(expected,sizeof(expected),"%u",sequence);
+        unsigned mode=atomic_load(&ptt_mode);
+        if((mode==PTT_ACTIVE || mode==PTT_DRAINING) && !strcmp(string(j,"captureId"),expected))
+            atomic_store(&ptt_ack,sequence);
+    } else if(!strcmp(type,"voice.ptt.empty")) {
+        char expected[16];snprintf(expected,sizeof(expected),"%u",atomic_load(&ptt_sequence));
+        if(atomic_load(&ptt_reply) && !strcmp(string(j,"captureId"),expected)) {
+            atomic_store(&ptt_reply,false);atomic_store(&ptt_problem,4);cue_clear();cue_request(CUE_ERROR);
+        }
     } else if(!strcmp(type,"response.started")) {
         const char *id=string(j,"responseId");
-        if(atomic_load(&host_busy) && !atomic_load(&suppress_audio) && atomic_load(&mic) &&
+        if(atomic_load(&host_busy) && !atomic_load(&suppress_audio) && (atomic_load(&mic) || atomic_load(&ptt_reply)) &&
            *id && strlen(id)<sizeof(response_id))snprintf(response_id,sizeof(response_id),"%s",id);
     } else if(!strcmp(type,"audio.delta")) {
         const char *id=string(j,"responseId"),*audio=string(j,"audio");int rate=number(j,"sampleRate");
-        if(!atomic_load(&mic) || !atomic_load(&ready) || !audio_available || atomic_load(&suppress_audio) ||
+        if((!atomic_load(&mic) && !atomic_load(&ptt_reply)) || !atomic_load(&ready) || !audio_available || atomic_load(&suppress_audio) ||
            !response_id[0] || strcmp(id,response_id)) {cJSON_Delete(j);return;}
         if((rate!=16000 && rate!=24000) || !*id || strlen(id)>128) {cJSON_Delete(j);fail("后端音频格式不支持");return;}
         /* Decode complete base64 quartets into even PCM chunks. The bounded
@@ -258,16 +373,21 @@ static void receive_message(void) {
         atomic_fetch_add(&epoch,1);
     } else if(!strcmp(type,"voice.progress") && atomic_load(&ready)) {
         portENTER_CRITICAL(&state_lock);
-        online_feedback_progress(&feedback,string(j,"turnId"),string(j,"phase"),(uint64_t)(esp_timer_get_time()/1000));
+        bool accepted=online_feedback_progress(&feedback,string(j,"turnId"),string(j,"phase"),(uint64_t)(esp_timer_get_time()/1000));
         portEXIT_CRITICAL(&state_lock);
+        if(accepted)atomic_store(&host_capturing,!strcmp(string(j,"phase"),"capturing"));
+        if(accepted && !strcmp(string(j,"phase"),"capturing") && atomic_load(&ptt_mode)==PTT_IDLE)atomic_store(&ptt_problem,0);
     } else if(!strcmp(type,"voice.result") && atomic_load(&ready)) {
         portENTER_CRITICAL(&state_lock);
         bool accepted=online_feedback_result(&feedback,string(j,"turnId"),string(j,"status"),string(j,"code"));
         bool problem=accepted && feedback.problem;
         portEXIT_CRITICAL(&state_lock);
         if(accepted) {
-            if(problem)atomic_store(&cue_pending,true);
+            atomic_store(&host_capturing,false);
+            if(problem && atomic_load(&ptt_mode)!=PTT_IDLE && atomic_load(&ptt_ack)==atomic_load(&ptt_sequence))atomic_store(&ptt_mode,PTT_FAILED);
+            atomic_store(&ptt_reply,false);
             atomic_store(&host_busy,false);atomic_store(&suppress_audio,true);atomic_fetch_add(&epoch,1);response_id[0]=0;
+            if(problem)cue_request(CUE_ERROR);
             state(atomic_load(&mic)?ONLINE_LISTENING:ONLINE_READY,NULL);
         }
     } else if(!strcmp(type,"error")) {
@@ -277,7 +397,9 @@ static void receive_message(void) {
             portENTER_CRITICAL(&state_lock);
             feedback.problem=online_error_text(code);feedback.phase=NULL;feedback.settled=true;
             portEXIT_CRITICAL(&state_lock);
-            atomic_store(&cue_pending,true);atomic_store(&host_busy,false);atomic_store(&suppress_audio,true);atomic_fetch_add(&epoch,1);
+            if(atomic_load(&ptt_mode)!=PTT_IDLE)atomic_store(&ptt_mode,PTT_FAILED);
+            atomic_store(&ptt_reply,false);
+            atomic_store(&host_busy,false);atomic_store(&host_capturing,false);cue_request(CUE_ERROR);atomic_store(&suppress_audio,true);atomic_fetch_add(&epoch,1);
             state(atomic_load(&mic)?ONLINE_LISTENING:ONLINE_READY,NULL);
         } else {backend_problem=online_error_text(code);fail(backend_problem);}
     }
@@ -287,7 +409,7 @@ static void websocket_event(void *arg,esp_event_base_t base,int32_t id,void *dat
     (void)arg;(void)base;
     if(id==WEBSOCKET_EVENT_CONNECTED) {
         connection_http=connection_errno=0;backend_problem=NULL;
-        negotiated=false;response_id[0]=0;atomic_store(&host_busy,false);atomic_store(&suppress_audio,true);
+        negotiated=false;response_id[0]=0;atomic_store(&host_busy,false);atomic_store(&host_capturing,false);atomic_store(&suppress_audio,true);atomic_store(&ptt_supported,false);
         atomic_store(&connected,true);atomic_store(&hello_pending,true);frame_used=0;
         state(ONLINE_CONNECTING,"正在启动语音服务");
     } else if(id==WEBSOCKET_EVENT_DISCONNECTED || id==WEBSOCKET_EVENT_ERROR || id==WEBSOCKET_EVENT_CLOSED) {
@@ -296,8 +418,12 @@ static void websocket_event(void *arg,esp_event_base_t base,int32_t id,void *dat
             connection_http=problem->error_handle.esp_ws_handshake_status_code;
             connection_errno=problem->error_handle.esp_transport_sock_errno;
         }
-        negotiated=false;response_id[0]=0;atomic_store(&host_busy,false);atomic_store(&suppress_audio,true);
-        atomic_store(&connected,false);atomic_store(&ready,false);atomic_store(&hello_pending,false);atomic_fetch_add(&epoch,1);
+        negotiated=false;response_id[0]=0;atomic_store(&host_busy,false);atomic_store(&host_capturing,false);atomic_store(&suppress_audio,true);
+        atomic_store(&ptt_supported,false);atomic_store(&ptt_reply,false);
+        if(atomic_load(&ptt_mode)!=PTT_IDLE)online_ptt_fail_state(&ptt,2);
+        atomic_store(&connected,false);
+        if(atomic_exchange(&ready,false))cue_request(CUE_DISCONNECTED);
+        atomic_store(&hello_pending,false);atomic_fetch_add(&epoch,1);
         frame_used=0;message_active=false;
         ESP_LOGW("bean_network","websocket event=%ld",(long)id);
         state(backend_problem?ONLINE_ERROR:ONLINE_CONNECTING,backend_problem?backend_problem:
@@ -365,11 +491,36 @@ static void send_hello(void) {
     cJSON_AddItemToArray(caps,cJSON_CreateString("input.audio"));
     cJSON_AddItemToArray(caps,cJSON_CreateString("playback.receipts"));
     cJSON_AddItemToArray(caps,cJSON_CreateString("voice.feedback"));
+    cJSON_AddItemToArray(caps,cJSON_CreateString("input.push_to_talk"));
     cJSON_AddStringToObject(j,"locale","zh-CN");cJSON_AddStringToObject(j,"time_zone","Asia/Shanghai");
     cJSON *connection=cJSON_AddObjectToObject(j,"connection");
     cJSON_AddBoolToObject(connection,"voice_enabled",true);cJSON_AddBoolToObject(connection,"input_enabled",atomic_load(&mic));
     cJSON_AddBoolToObject(connection,"output_enabled",true);cJSON_AddBoolToObject(connection,"text_only",false);
     if(!send_json(j))fail("握手失败，请检查后端");
+}
+/* The audio worker alone owns the codec. Abort between 10 ms blocks so speech
+ * playback and a released push-to-talk gesture never wait for a whole cue. */
+static bool play_cue(online_cue_t kind,unsigned *format,int *applied,bool holding,unsigned sequence,bool *emitted) {
+    static int16_t samples[160];
+    *emitted=false;
+    if(!audio_available || !atomic_load(&cues_enabled) || !atomic_load(&volume))return false;
+    if(*format!=16000) {
+        if(bsp_audio_set_format(16000,16,1)!=ESP_OK){fail("扬声器不可用");return false;}
+        *format=16000;*applied=-1;
+    }
+    unsigned level=atomic_load(&volume);bsp_audio_set_volume((uint8_t)level);*applied=(int)level;
+    /* Six DMA descriptors can retain ~90 ms. Queue 100 ms of silence after
+     * the 80 ms tone so its last sample has left TX before capture resumes. */
+    for(unsigned block=0;block<18;block++) {
+        if(block<8)online_cue_render(kind,block,samples);else memset(samples,0,sizeof(samples));
+        unsigned mode=atomic_load(&ptt_mode);
+        bool active=holding?mode==PTT_ACTIVE:mode!=PTT_IDLE;
+        if(!online_cue_play_allowed(kind,atomic_load(&cues_enabled),atomic_load(&volume),holding,active,atomic_load(&host_busy),atomic_load(&host_capturing),atomic_load(&ptt_reply),uxQueueMessagesWaiting(playback)>0))return false;
+        if(holding && atomic_load(&ptt_sequence)!=sequence)return false;
+        if(bsp_audio_write(samples,sizeof(samples))!=ESP_OK){fail("扬声器不可用");return false;}
+        *emitted=true;
+    }
+    return true;
 }
 static void audio_task(void *arg) {
     (void)arg;
@@ -381,8 +532,9 @@ static void audio_task(void *arg) {
     int applied_volume=-1;
     int64_t last_metrics=0,starved_since=0,prefill_since=0;
     unsigned playback_starves=0,max_starve_ms=0,max_write_ms=0;
-    unsigned active_epoch=0,format=0;int64_t quiet_until=0;
+    unsigned active_epoch=0,format=0;int64_t quiet_until=0;online_cue_gate_t ptt_gate={0};
     for(;;) {
+        if(atomic_load(&ptt_mode)==PTT_DRAINING)atomic_store(&ptt_capture_stopped,true);
         if(esp_timer_get_time()-last_metrics>10000000) {
             last_metrics=esp_timer_get_time();
             ESP_LOGI("bean_audio","stack_free_min=%u heap_free=%lu ready=%d capture_drops=%u largest=%u",
@@ -391,26 +543,20 @@ static void audio_task(void *arg) {
         if(active[0] && (active_epoch!=atomic_load(&epoch) || !atomic_load(&ready))) {
             receipt("playback.cancelled",active);active[0]=0;quiet_until=esp_timer_get_time()+600000;applied_volume=-1;
         }
-        /* This worker owns both the cue and the codec. No online TTS or heap allocation. */
-        if(!active[0] && atomic_exchange(&cue_pending,false) && audio_available) {
-            static int16_t cue[160];
-            if(format!=16000) { if(bsp_audio_set_format(16000,16,1)!=ESP_OK){fail("扬声器不可用");continue;}format=16000; }
-            bsp_audio_set_volume(atomic_load(&volume));applied_volume=(int)atomic_load(&volume);
-            for(unsigned block=0;block<8;block++) {
-                for(unsigned i=0;i<160;i++) {
-                    unsigned at=block*160+i;
-                    int envelope=(int)(at<160?at:at>1120?1280-at:160);
-                    int triangle=(int)(at%20);triangle=triangle<10?triangle:20-triangle;
-                    cue[i]=(int16_t)((triangle-5)*envelope*4);
+        if(!active[0] && atomic_load(&ptt_mode)==PTT_IDLE && !uxQueueMessagesWaiting(playback)) {
+            online_cue_t cue;
+            if(cue_next(&cue)) {
+                bool low=cue==CUE_CONNECTED || cue==CUE_DISCONNECTED || cue==CUE_VOLUME;
+                if((!low || !atomic_load(&mic)) && (!atomic_load(&host_busy) || cue==CUE_PTT_SEND)) {
+                    bool emitted=false,complete=play_cue(cue,&format,&applied_volume,false,0,&emitted);
+                    if(emitted) {int64_t tail=esp_timer_get_time()+(complete?60000:600000);if(tail>quiet_until)quiet_until=tail;}
                 }
-                if(bsp_audio_write((uint8_t *)cue,sizeof(cue))!=ESP_OK)break;
+                continue;
             }
-            for(unsigned i=0;i<6;i++)if(bsp_audio_write(silence,sizeof(silence))!=ESP_OK)break;
-            quiet_until=esp_timer_get_time()+600000;continue;
         }
         /* Reuse the existing queue for about 300 ms of starting audio. This
          * absorbs provider/network jitter without allocating another buffer. */
-        if(!active[0] && atomic_load(&ready)) {
+        if(!active[0] && atomic_load(&ready) && atomic_load(&ptt_mode)==PTT_IDLE) {
             static playback_t first;
             if(xQueuePeek(playback,&first,0)==pdTRUE && first.epoch==atomic_load(&epoch) && !first.done) {
                 if(!prefill_since)prefill_since=esp_timer_get_time();
@@ -420,9 +566,9 @@ static void audio_task(void *arg) {
                 }
             } else prefill_since=0;
         }
-        if(xQueueReceive(playback,&p,pdMS_TO_TICKS(5))==pdTRUE) {
+        if(atomic_load(&ptt_mode)==PTT_IDLE && xQueueReceive(playback,&p,pdMS_TO_TICKS(5))==pdTRUE) {
             prefill_since=0;
-            if(p.epoch!=atomic_load(&epoch) || !atomic_load(&ready))continue;
+            if(p.ptt || p.epoch!=atomic_load(&epoch) || !atomic_load(&ready))continue;
             if(starved_since) {
                 unsigned waited=(unsigned)((esp_timer_get_time()-starved_since)/1000);
                 if(waited>=60 && !p.done){playback_starves++;if(waited>max_starve_ms)max_starve_ms=waited;ESP_LOGW("bean_audio","playback queue empty ms=%u buffered=%u",waited,(unsigned)uxQueueMessagesWaiting(playback));}
@@ -465,11 +611,45 @@ static void audio_task(void *arg) {
         if(active[0]){if(!starved_since)starved_since=esp_timer_get_time();continue;}
         starved_since=0;
         atomic_store(&level,0);
+        unsigned mode=atomic_load(&ptt_mode);
+        if(mode==PTT_ARMED || mode==PTT_ACTIVE) {
+            unsigned sequence=atomic_load(&ptt_sequence);
+            if(!audio_available || !atomic_load(&ready) || esp_timer_get_time()<=quiet_until) {vTaskDelay(pdMS_TO_TICKS(5));continue;}
+            if(atomic_load(&ptt_wait_cue)) {
+                if(mode==PTT_ARMED) {vTaskDelay(pdMS_TO_TICKS(5));continue;}
+                if(!atomic_load(&cues_enabled) || !atomic_load(&volume))atomic_store(&ptt_wait_cue,false);
+                else if(ptt_gate.sequence!=sequence) {
+                    bool emitted=false,completed=play_cue(CUE_PTT_START,&format,&applied_volume,true,sequence,&emitted);
+                    if(emitted && !completed)quiet_until=esp_timer_get_time()+600000;
+                    if(!completed)continue;
+                    online_cue_gate_begin(&ptt_gate,sequence,(uint64_t)esp_timer_get_time());
+                }
+                if(!online_cue_capture_allowed(atomic_load(&ptt_wait_cue),mode==PTT_ACTIVE,ptt_gate.sequence==sequence,online_cue_gate_ready(&ptt_gate,sequence,(uint64_t)esp_timer_get_time()))) {
+                    /* Drop the RX backlog and acoustic tail instead of sending
+                     * our own tone to the recognizer. RELEASE is checked on the
+                     * next iteration before any captured frame can be queued. */
+                    if(bsp_audio_read(c.pcm,PCM_BYTES)!=ESP_OK){fail("麦克风读取失败");continue;}
+                    online_cue_gate_discard(&ptt_gate);continue;
+                }
+                if(atomic_load(&ptt_mode)!=PTT_ACTIVE || atomic_load(&ptt_sequence)!=sequence)continue;
+            }
+            if(format!=16000){if(bsp_audio_set_format(16000,16,1)!=ESP_OK){fail("麦克风不可用");continue;}format=16000;}
+            atomic_store(&ptt_audio_started,true);
+            if(bsp_audio_read(c.pcm,PCM_BYTES)!=ESP_OK){fail("麦克风读取失败");continue;}
+            if(online_ptt_frame_valid(&ptt,sequence,false)) {
+                p=(playback_t){.epoch=sequence,.rate=16000,.len=PCM_BYTES,.ptt=true};
+                memcpy(p.pcm,c.pcm,PCM_BYTES);
+                if(xQueueSend(playback,&p,0)!=pdTRUE)online_ptt_fail_state(&ptt,3);
+            }
+            continue;
+        }
+        if(mode!=PTT_IDLE){vTaskDelay(pdMS_TO_TICKS(5));continue;}
         if(!audio_available || !atomic_load(&ready) || !atomic_load(&mic) || atomic_load(&host_busy)){vTaskDelay(pdMS_TO_TICKS(20));continue;}
         if(format!=16000){if(bsp_audio_set_format(16000,16,1)!=ESP_OK){fail("麦克风不可用");continue;}format=16000;}
+        unsigned read_epoch=atomic_load(&epoch);
         if(bsp_audio_read(c.pcm,PCM_BYTES)!=ESP_OK){fail("麦克风读取失败");continue;}
-        if(atomic_load(&mic) && !atomic_load(&host_busy) && esp_timer_get_time()>quiet_until) {
-            c.epoch=atomic_load(&epoch);
+        if(atomic_load(&ptt_mode)==PTT_IDLE && read_epoch==atomic_load(&epoch) && atomic_load(&mic) && !atomic_load(&host_busy) && esp_timer_get_time()>quiet_until) {
+            c.epoch=read_epoch;
             if(xQueueSend(capture,&c,0)!=pdTRUE) {
                 /* Prefer current speech to stale queued audio after a network stall.
                  * A transient full queue must not tear down the voice session. */
@@ -488,6 +668,8 @@ static void network_task(void *arg) {
     atomic_store(&selected_theme,online_theme_load());
     atomic_store(&selected_idle,online_idle_load());
     atomic_store(&selected_brightness,online_brightness_load());
+    atomic_store(&overlay,online_overlay_load());
+    atomic_store(&cues_enabled,online_cues_load());
     online_background_init();
     online_background_t background=online_background_load();
     if(background==ONLINE_BACKGROUND_CUSTOM && !online_background_custom_available()) {
@@ -498,6 +680,8 @@ static void network_task(void *arg) {
     bool theme_worker=xTaskCreate(theme_task,"whale_theme",3072,NULL,2,NULL)==pdPASS;
     atomic_store(&theme_storage_available,theme_worker);atomic_store(&theme_save_failed,!theme_worker);
     atomic_store(&idle_save_failed,!theme_worker);
+    atomic_store(&overlay_save_failed,!theme_worker);
+    atomic_store(&cues_save_failed,!theme_worker);
     if(!online_load_config(&config)) {
         state(ONLINE_CONNECTING,"正在扫描附近 Wi-Fi");
         char info[128];esp_err_t e=online_start_setup(info,sizeof(info));state(e==ESP_OK?ONLINE_SETUP:ONLINE_ERROR,e==ESP_OK?info:"配网启动失败");
@@ -539,14 +723,15 @@ static void network_task(void *arg) {
         state(ONLINE_ERROR,"后端连接初始化失败");vTaskDelete(NULL);return;
     }
     online_time_wait_t time_wait={0};
-    bool started=false,previous_mic=false;int64_t last_connect=0;capture_t c;receipt_t r;
+    bool started=false,previous_mic=false;int64_t last_connect=0,ptt_started_at=0;unsigned ptt_sent=0;capture_t c;receipt_t r;
+    static playback_t ptt_frame;
     for(;;) {
         if(atomic_exchange(&setup_pending,false)) {
             nvs_handle_t n;esp_err_t e=nvs_open("dsh_voice",NVS_READWRITE,&n);
             if(e==ESP_OK){e=nvs_set_u8(n,"setup",1);if(e==ESP_OK)e=nvs_commit(n);nvs_close(n);}
             if(e==ESP_OK)esp_restart();else state(ONLINE_ERROR,"无法进入配置，请重试");
         }
-        if(atomic_exchange(&volume_pending,false))atomic_store(&volume,online_volume_next(atomic_load(&volume)));
+        if(atomic_exchange(&volume_pending,false)){atomic_store(&volume,online_volume_next(atomic_load(&volume)));cue_request(CUE_VOLUME);}
         bool has_ip=atomic_load(&got_ip);
         if(!started) {
             bool was_waiting=time_wait.active;
@@ -593,6 +778,45 @@ static void network_task(void *arg) {
         }
         while(xQueueReceive(receipts,&r,0)==pdTRUE)if(atomic_load(&connected)) {
             cJSON *j=event(r.type);cJSON_AddStringToObject(j,"responseId",r.id);if(!send_json(j)){recover_transport();break;}
+        }
+        unsigned mode=atomic_load(&ptt_mode),sequence=atomic_load(&ptt_sequence);
+        if(!atomic_load(&connected) || !atomic_load(&ready)) {
+            ptt_sent=0;
+            if(mode==PTT_ARMED || mode==PTT_ACTIVE || mode==PTT_DRAINING) {
+                online_ptt_fail_state(&ptt,2);
+            }
+        } else if(mode==PTT_ACTIVE || mode==PTT_DRAINING) {
+            if(!online_cue_upload_allowed(atomic_load(&ptt_wait_cue),atomic_load(&ptt_audio_started))) {vTaskDelay(pdMS_TO_TICKS(5));continue;}
+            if(ptt_sent!=sequence) {
+                char id[16];snprintf(id,sizeof(id),"%u",sequence);
+                cJSON *j=event("input_audio_buffer.start");cJSON_AddStringToObject(j,"captureId",id);
+                if(!send_json(j)){recover_transport();continue;}
+                ptt_sent=sequence;ptt_started_at=esp_timer_get_time();
+            }
+            if(atomic_load(&ptt_ack)!=sequence && esp_timer_get_time()-ptt_started_at>3000000) {
+                online_ptt_fail_state(&ptt,2);continue;
+            }
+            if(xQueueReceive(playback,&ptt_frame,0)==pdTRUE) {
+                if(ptt_frame.ptt && ptt_frame.epoch==sequence && online_ptt_frame_valid(&ptt,sequence,true)) {
+                    unsigned char encoded[PCM_BYTES*4/3+8];size_t len=0;
+                    if(!mbedtls_base64_encode(encoded,sizeof(encoded),&len,ptt_frame.pcm,ptt_frame.len)) {
+                        encoded[len]=0;cJSON *j=event("input_audio_buffer.append");cJSON_AddStringToObject(j,"audio",(char *)encoded);
+                        if(!send_json(j)){recover_transport();continue;}
+                    } else online_ptt_fail_state(&ptt,3);
+                }
+            } else if(online_ptt_commit_ready(&ptt,sequence,true)) {
+                char id[16];snprintf(id,sizeof(id),"%u",sequence);
+                cJSON *j=event("input_audio_buffer.commit");cJSON_AddStringToObject(j,"captureId",id);
+                atomic_store(&ptt_reply,true);
+                if(!send_json(j)){atomic_store(&ptt_reply,false);recover_transport();continue;}
+                atomic_store(&ptt_mode,PTT_IDLE);ptt_sent=0;cue_request(CUE_PTT_SEND);
+            }
+            vTaskDelay(pdMS_TO_TICKS(1));continue;
+        } else if(mode==PTT_ARMED || mode==PTT_FAILED) {
+            if(mode==PTT_FAILED && ptt_sent) {send_json(event("response.cancel"));ptt_sent=0;}
+            vTaskDelay(pdMS_TO_TICKS(5));continue;
+        } else if(ptt_sent) {
+            send_json(event("response.cancel"));ptt_sent=0;
         }
         if(xQueueReceive(capture,&c,pdMS_TO_TICKS(10))==pdTRUE && atomic_load(&connected) && atomic_load(&ready) && atomic_load(&mic) && !atomic_load(&host_busy) && c.epoch==atomic_load(&epoch)) {
             unsigned char encoded[PCM_BYTES*4/3+8];size_t len=0;

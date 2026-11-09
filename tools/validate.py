@@ -31,6 +31,10 @@ def host_tests():
     run(*command, '-std=c11', '-Wall', '-Wextra', '-Werror', '-Imain',
         'tests/test_online_state.c', 'main/online_state.c', '-o', executable)
     run(executable)
+    cue_test = build / ('cue-test.exe' if os.name == 'nt' else 'cue-test')
+    run(*command, '-std=c11', '-Wall', '-Wextra', '-Werror', '-Imain',
+        'tests/test_online_cue.c', 'main/online_cue.c', '-o', cue_test)
+    run(cue_test)
     theme_test = build / ('theme-test.exe' if os.name == 'nt' else 'theme-test')
     run(*command, '-std=c11', '-Wall', '-Wextra', '-Werror', '-Itests/theme_stubs', '-Imain',
         'tests/test_online_theme.c', 'main/online_theme.c', 'main/online_state.c', '-o', theme_test)

@@ -2,12 +2,13 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdatomic.h>
 typedef enum { ONLINE_SETUP, ONLINE_CONNECTING, ONLINE_READY, ONLINE_LISTENING,
     ONLINE_THINKING, ONLINE_SPEAKING, ONLINE_ERROR } online_phase_t;
 typedef enum { ONLINE_THEME_WHALE, ONLINE_THEME_MINT } online_theme_t;
 online_theme_t online_theme_normalize(unsigned stored);
 online_theme_t online_theme_next(online_theme_t theme);
-typedef enum { ONLINE_BACKGROUND_DAY, ONLINE_BACKGROUND_NIGHT, ONLINE_BACKGROUND_CUSTOM } online_background_t;
+typedef enum { ONLINE_BACKGROUND_DAY, ONLINE_BACKGROUND_NIGHT, ONLINE_BACKGROUND_CUSTOM, ONLINE_BACKGROUND_OFF } online_background_t;
 online_background_t online_background_normalize(unsigned stored);
 online_background_t online_background_next(online_background_t current,bool has_custom);
 typedef enum { ONLINE_AVATAR_IDLE, ONLINE_AVATAR_LISTENING, ONLINE_AVATAR_THINKING,
@@ -29,6 +30,18 @@ typedef struct { uint32_t version; char ssid[33], password[65], url[256], token[
 bool online_config_valid(const online_config_t *c);
 bool online_reuse_wifi(online_config_t *next,const online_config_t *previous);
 bool online_fragment(size_t *used, size_t capacity, size_t offset, size_t length, size_t total);
+enum { PTT_IDLE, PTT_ARMED, PTT_ACTIVE, PTT_DRAINING, PTT_FAILED };
+typedef struct {
+    atomic_uint mode,sequence,ack,problem;
+    atomic_bool supported,reply,capture_stopped,audio_started;
+} online_ptt_control_t;
+void online_ptt_arm_state(online_ptt_control_t *ptt);
+void online_ptt_start_state(online_ptt_control_t *ptt,bool ready);
+void online_ptt_release_state(online_ptt_control_t *ptt);
+bool online_ptt_release_waiting(online_ptt_control_t *ptt,bool wait_cue);
+void online_ptt_fail_state(online_ptt_control_t *ptt,unsigned problem);
+bool online_ptt_frame_valid(const online_ptt_control_t *ptt,unsigned sequence,bool sending);
+bool online_ptt_commit_ready(const online_ptt_control_t *ptt,unsigned sequence,bool queue_empty);
 const char *online_phase_text(online_phase_t phase);
 bool online_session_compatible(const char *version, bool input_audio, bool receipts);
 const char *online_error_text(const char *code);
@@ -42,13 +55,14 @@ const char *online_connection_error(int http_status,int socket_error,bool has_ip
 bool online_endpoint_from_ip(const char *ip,char *out,size_t size);
 bool online_endpoint_from_ip_port(const char *ip,unsigned port,char *out,size_t size);
 
-typedef enum { ONLINE_HOME, ONLINE_SETTINGS, ONLINE_CONFIRM } online_page_t;
+typedef enum { ONLINE_HOME, ONLINE_SETTINGS, ONLINE_DISPLAY, ONLINE_CONNECTION, ONLINE_CONFIRM } online_page_t;
 typedef enum { ONLINE_KEY_OK=1, ONLINE_KEY_UP, ONLINE_KEY_DOWN, ONLINE_KEY_LONG } online_key_t;
 typedef enum { ONLINE_ACTION_NONE, ONLINE_ACTION_MIC, ONLINE_ACTION_VOLUME,
     ONLINE_ACTION_CANCEL, ONLINE_ACTION_SETUP, ONLINE_ACTION_THEME, ONLINE_ACTION_IDLE,
-    ONLINE_ACTION_BACKGROUND, ONLINE_ACTION_BRIGHTNESS } online_action_t;
-typedef enum { ONLINE_MENU_THEME, ONLINE_MENU_BACKGROUND, ONLINE_MENU_BRIGHTNESS, ONLINE_MENU_IDLE,
-    ONLINE_MENU_UPLOAD, ONLINE_MENU_HOME, ONLINE_MENU_SETUP, ONLINE_MENU_COUNT } online_menu_item_t;
+    ONLINE_ACTION_BACKGROUND, ONLINE_ACTION_BRIGHTNESS, ONLINE_ACTION_OVERLAY, ONLINE_ACTION_CUE } online_action_t;
+typedef enum { ONLINE_MENU_DISPLAY, ONLINE_MENU_CONNECTION, ONLINE_MENU_UPLOAD, ONLINE_MENU_HOME, ONLINE_MENU_SETUP, ONLINE_MENU_COUNT } online_menu_item_t;
+typedef enum { ONLINE_DISPLAY_THEME, ONLINE_DISPLAY_BACKGROUND, ONLINE_DISPLAY_BRIGHTNESS, ONLINE_DISPLAY_IDLE,
+    ONLINE_DISPLAY_OVERLAY, ONLINE_DISPLAY_CUE, ONLINE_DISPLAY_BACK, ONLINE_DISPLAY_COUNT } online_display_item_t;
 typedef struct { online_page_t page; unsigned selected; } online_menu_t;
 online_action_t online_menu_key(online_menu_t *menu,online_key_t key);
 

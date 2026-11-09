@@ -1,6 +1,38 @@
 #include "online_theme.h"
 #include "nvs.h"
 
+bool online_cues_load(void) {
+    nvs_handle_t handle;uint8_t value=1;
+    if(nvs_open("dsh_voice",NVS_READONLY,&handle)==ESP_OK) {
+        if(nvs_get_u8(handle,"cues",&value)!=ESP_OK || value>1)value=1;
+        nvs_close(handle);
+    }
+    return value!=0;
+}
+bool online_cues_save(bool enabled) {
+    nvs_handle_t handle;
+    if(nvs_open("dsh_voice",NVS_READWRITE,&handle)!=ESP_OK)return false;
+    esp_err_t result=nvs_set_u8(handle,"cues",enabled?1:0);
+    if(result==ESP_OK)result=nvs_commit(handle);
+    nvs_close(handle);return result==ESP_OK;
+}
+
+bool online_overlay_load(void) {
+    nvs_handle_t handle;uint8_t value=1;
+    if(nvs_open("dsh_voice",NVS_READONLY,&handle)==ESP_OK) {
+        if(nvs_get_u8(handle,"overlay",&value)!=ESP_OK || value>1)value=1;
+        nvs_close(handle);
+    }
+    return value!=0;
+}
+bool online_overlay_save(bool enabled) {
+    nvs_handle_t handle;
+    if(nvs_open("dsh_voice",NVS_READWRITE,&handle)!=ESP_OK)return false;
+    esp_err_t result=nvs_set_u8(handle,"overlay",enabled?1:0);
+    if(result==ESP_OK)result=nvs_commit(handle);
+    nvs_close(handle);return result==ESP_OK;
+}
+
 unsigned online_brightness_load(void) {
     nvs_handle_t handle;uint8_t value=100;
     if(nvs_open("dsh_voice",NVS_READONLY,&handle)==ESP_OK) {

@@ -34,19 +34,43 @@ hint; holding OK still opens settings.
 | Short OK | Toggle microphone; initially closed |
 | Short UP | Cycle 0, 25, 50, 75, 90, 100%; 0 mutes |
 | Short DOWN | Cancel recognition, generation or playback |
+| Hold DOWN | Speak while holding; release to send |
 | Hold OK | Open settings; hold again to return home |
+
+Push-to-talk works alongside continuous microphone mode and restores the prior
+microphone setting afterwards. Holding DOWN interrupts a current response. With
+audible cues enabled and volume above zero, wait for the start tone to finish and
+the recording indication before speaking; releasing before readiness discards the
+recording. The cue and its acoustic tail are not uploaded. With cues disabled or
+muted, local pre-roll is retained; a short cancellation press never uploads it.
+A connector supporting push-to-talk is required; older connectors retain short-press
+cancellation. Turning interface hints off also hides the recording indication.
+
+Settings groups appearance and screen controls under System settings (系统设置); select 返回设置 to go back, or hold OK to return home. Interface hints (界面提示) default to on. When off, the home screen shows only the background and character; title, status and button icons and messages are hidden, but the physical buttons still work. Provisioning remains visible. The preference survives restart; a save failure is shown in settings and toggling retries it. Home messages share a rounded, translucent panel and scroll when long without moving the bottom controls.
+
+Sound cues (提示音) in System settings default to on and survive restart.
+Turning them off disables both operation and failure cues without changing spoken
+replies. Cues follow the device volume, including mute. Microphone changes,
+push-to-talk, cancellation, connection changes, failures and volume adjustments
+use short tones; moving through settings remains silent. Cues that would
+interfere with speech or recording may be dropped. Toggle again to retry a failed save.
+The device synthesizes these tones without external audio assets; the feedback
+choices draw on [Apple's feedback guidance](https://developer.apple.com/design/human-interface-guidelines/feedback)
+and [Microsoft's sound design guidance](https://learn.microsoft.com/en-us/windows/mixed-reality/design/spatial-sound-design).
+
+Status information (状态信息) shows the configured Wi-Fi, computer address and saved-password/pairing status without displaying credentials. The operation guide continues below the status values and covers home controls, settings, network setup and background upload. UP/DOWN scroll and OK returns to settings.
 
 Thinking cycles through thoughtful, attentive and blinking expressions every
 3.2 seconds, alongside bouncing dots. It remains in the real processing phase
 and DOWN still cancels. The animation itself does not shorten recognition, model or TTS latency.
 
-The second settings row (背景) cycles Seaside Tea, Moonlit Dream and an available
-custom background. Selection applies immediately, survives restart and is saved
-after thinking/speech finishes. Failed saves can be retried. The list scrolls
-with UP/DOWN so the upload, return-home and reconfiguration actions remain reachable.
+In System settings (系统设置), Background (背景) cycles Seaside Tea, Moonlit Dream and an available
+custom background, and Off (关闭). Off shows the character against the theme color and retains the uploaded image. Selection applies immediately, survives restart and is saved
+after thinking/speech finishes. Failed saves can be retried. The System settings list
+scrolls with UP/DOWN.
 Select 上传背景 to restart into the setup hotspot, interrupting voice while keeping
 saved connection information. Connect a phone to `DSH-Voice-*`, open
-`http://192.168.4.1`, then select the top 自定义背景 tab. The 连接鲸语 tab returns to network setup. Choose a built-in or upload JPG, PNG
+`http://192.168.4.1`, then select the top 自定义背景 tab. The 连接鲸语 tab returns to network setup. Choose a built-in, turn the background off, or upload JPG, PNG
 or WebP (up to 8 MB and 24 megapixels). The browser center-crops to 3:4 and
 quantizes to 96×128 with 16 colors, showing the converted result. Uploads are
 exactly 6,184 bytes. Upload first, then save/restart; no Wi-Fi password or pairing
@@ -61,13 +85,13 @@ Download eight sample PNGs from the [background gallery and upload instructions]
 Files live in `assets/backgrounds/examples/` and are examples for manual upload;
 they are not added to the built-in choices. Only the most recently uploaded custom image is retained.
 
-The third settings row (亮度) cycles 25%, 50%, 75% and 100% backlight brightness.
+In System settings, Brightness (亮度) cycles 25%, 50%, 75% and 100% backlight brightness.
 Changes apply immediately and persist across restarts; the default is 100%.
 Sleeping still sets 0%; a key wake or thinking/speech restores the chosen level.
 Save errors appear in settings; cycle again to retry. Flash writes wait until
 thinking/speech finishes.
 
-In settings, select the fourth row (息屏) and briefly press OK to cycle through
+In System settings, select Sleep (息屏) and briefly press OK to cycle through
 1 minute, 3 minutes, 10 minutes and Never. Changes apply immediately and are
 saved across restarts; the default is 1 minute. A failed save is shown in
 settings; cycle again to retry. Saving is deferred while thinking or speaking.
@@ -86,7 +110,7 @@ the microphone. Doubao recognition uploads while capture continues. Capture paus
 speaker completion is acknowledged. No automatic voice interruption or acoustic
 echo cancellation is provided. Handle tool approvals in DSH.
 
-Hold OK, select the first settings row (界面), and briefly press OK to switch
+Hold OK, open System settings (系统设置), select Interface (界面), and briefly press OK to switch
 between Whale Girl and the mint face. Hold OK again to return home. The choice
 survives restart without changing Wi-Fi, pairing or the conversation. Saving is
 deferred during speech/thinking, and a failed save is shown in settings. Whale
@@ -150,8 +174,8 @@ To change presets, choose one from the updated DSH connector's conversation list
 “Apply preset and start a new conversation”. The device reconnects automatically, retaining old
 conversation history and existing Wi-Fi/pairing settings. Normal saves and reconnects retain the
 current conversation. IDs may contain Chinese; use the Host roster and reload it after enabling
-a new preset. The home status bar and required messages use 70% background opacity, and the
-outlined key hints use 60%, allowing the picture to show through while keeping controls legible.
+a new preset. The home status bar uses 70% background opacity; messages and outlined key hints
+use 60%, allowing the picture to show through while keeping controls legible.
 
 2. Enable AI Passport Connector and **generate a pairing code and enable the connection**. It displays available computer IPs and **four digits**, and listens on `0.0.0.0:3101`. Enter the computer LAN IP on the device, never `0.0.0.0`, `127.0.0.1` or the device address.
 3. Join the displayed `DSH-Voice-*` hotspot on a phone; **no password is needed**. Open `http://192.168.4.1` and enter the computer IP plus the same four digits, including leading zeros.
@@ -201,6 +225,6 @@ and [Qwen Voice Bean](https://github.com/liutaocode/esp32demo/tree/main/examples
 
 Choose Host, Xiaomi or Doubao recognition in the computer connector, independently of TTS. Xiaomi submits complete utterances; Doubao uploads during speech. Cloud recognition reuses the computer's saved keys and does not require Host ASR. The account still needs ASR access and quota; no provider credentials are stored on the device.
 
-After negotiating `voice.feedback`, the device shows recognition, thinking, tool execution, synthesis and playback stages. After eight seconds in a stage it offers DOWN to cancel. Short speech, empty recognition and turn failures retain a reason and play one local cue at the device volume. Recoverable failures preserve the connection and microphone choice. New valid input clears the reason; cancellation stays quiet. The audio worker suppresses capture around the cue.
+After negotiating `voice.feedback`, character expressions and status icons show normal conversation without overlaying stage labels. After eight seconds of continuous waiting, a DOWN cancellation hint appears for three seconds; the bottom controls stay in place. Short speech, empty recognition and turn failures retain a reason and play one local cue at the device volume. Recoverable failures preserve the connection and microphone choice. New valid input clears the reason; cancellation stays quiet. The audio worker suppresses capture around the cue.
 
 Supported TTS models stream after final reply text is ready. An interrupted or overlong stream stops with feedback without replaying spoken audio. The complete conversation text remains in DSH. Older connectors remain compatible with reduced feedback.

@@ -19,16 +19,16 @@ LV_FONT_DECLARE(mouthy_bean_zh_16);
 #define INK 0x173E3A
 #define PAPER 0xE9F8F3
 static lv_obj_t *face_layer,*pupils[2],*lids[2],*closed_eyes[2],*ears[2],*mouth,*teeth,*tongue,*smile;
-static lv_obj_t *title,*caption,*footer,*setup_panel,*setup_text;
+static lv_obj_t *title,*header,*caption,*footer,*setup_panel,*setup_text;
 static lv_obj_t *home_controls,*background_image,*settings_list;
 static ui_icon_t link_icon,mic_icon,battery_icon,phase_icon,volume_icon;
 static ui_icon_t up_icon,ok_icon,down_icon,action_mic,stop_icon;
 static lv_obj_t *app_screen,*whale_layer,*whale_image;
-static lv_obj_t *settings_layer,*confirm_layer,*settings_help,*wifi_value,*password_value,*host_value,*token_value;
-static lv_obj_t *settings_choices[ONLINE_MENU_COUNT],*confirm_choices[2];
+static lv_obj_t *settings_layer,*configuration,*connection_back,*settings_footer,*confirm_layer,*settings_help,*status_text;
+static lv_obj_t *settings_choices[ONLINE_DISPLAY_COUNT],*confirm_choices[2];
 static online_menu_t menu;
 static atomic_uint pending_key;
-static atomic_bool pending_activity,screen_asleep;
+static atomic_bool pending_activity,screen_asleep,ptt_home;
 static online_screen_t screen_idle;
 static bool buttons_available;
 static lv_obj_t *shape(lv_obj_t *p,int x,int y,int w,int h,uint32_t color,int radius) {
@@ -96,13 +96,20 @@ static void refresh(lv_timer_t *timer) {
             case ONLINE_ACTION_IDLE: online_cycle_idle();break;
             case ONLINE_ACTION_BACKGROUND: online_cycle_background();break;
             case ONLINE_ACTION_BRIGHTNESS: online_cycle_brightness();break;
+            case ONLINE_ACTION_OVERLAY: online_toggle_overlay();break;
+            case ONLINE_ACTION_CUE: online_toggle_cues();break;
             default: break;
         }
+        if(menu.page==ONLINE_CONNECTION && (key==ONLINE_KEY_UP || key==ONLINE_KEY_DOWN)) {
+            lv_obj_update_layout(configuration);
+            lv_obj_scroll_by_bounded(configuration,0,key==ONLINE_KEY_UP?36:-36,LV_ANIM_OFF);
+        }
     }
+    if(menu.page!=ONLINE_HOME)online_ptt_abort();
     online_status_t s;online_snapshot(&s);
     bool was_asleep=atomic_load(&screen_asleep);
     bool asleep=online_screen_step(&screen_idle,now,activity,
-        !buttons_available || s.phase==ONLINE_SETUP || s.phase==ONLINE_THINKING || s.phase==ONLINE_SPEAKING,
+        !buttons_available || s.ptt_recording || s.phase==ONLINE_SETUP || s.phase==ONLINE_THINKING || s.phase==ONLINE_SPEAKING,
         online_idle_timeout_ms(s.idle));
     if(asleep!=was_asleep) {
         atomic_store(&screen_asleep,asleep);
@@ -115,7 +122,8 @@ static void refresh(lv_timer_t *timer) {
     /* Keep the lightweight timer for wake events; stop animation/invalidation. */
     if(asleep)return;
     bool home=menu.page==ONLINE_HOME,setup=s.phase==ONLINE_SETUP;
-    bool listen=s.mic && (s.phase==ONLINE_LISTENING || s.phase==ONLINE_READY);
+    atomic_store(&ptt_home,home && !setup);
+    bool listen=(s.mic || s.ptt_recording) && (s.phase==ONLINE_LISTENING || s.phase==ONLINE_READY);
     bool speaking=s.phase==ONLINE_SPEAKING;
     bool whale=s.theme==ONLINE_THEME_WHALE;
     uint32_t background=whale?0xE7F0FF:YELLOW;
@@ -126,14 +134,17 @@ static void refresh(lv_timer_t *timer) {
         lv_obj_set_style_bg_color(confirm_layer,lv_color_hex(background),0);
         applied_theme=s.theme;
     }
-    text_changed(title,home?"鲸语":menu.page==ONLINE_SETTINGS?"设置":"重新配置？");
-    visibility(background_image,home && !setup);
+    bool show_overlay=!home || setup || s.overlay;
+    text_changed(title,home?"鲸语":menu.page==ONLINE_SETTINGS?"设置":menu.page==ONLINE_DISPLAY?"系统设置":menu.page==ONLINE_CONNECTION?"状态信息":"重新配置？");
+    visibility(header,show_overlay);visibility(title,show_overlay);
+    visibility(link_icon.obj,show_overlay);visibility(mic_icon.obj,show_overlay);visibility(battery_icon.obj,show_overlay);
     static int displayed_background=-1;
     online_background_t selected=online_background_normalize(s.background);
     const uint8_t *encoded=online_background_data();
     const lv_image_dsc_t *custom=encoded?online_background_image(encoded):NULL;
     if(selected==ONLINE_BACKGROUND_CUSTOM && !custom)selected=ONLINE_BACKGROUND_DAY;
-    if(displayed_background!=(int)selected) {
+    visibility(background_image,home && !setup && selected!=ONLINE_BACKGROUND_OFF);
+    if(displayed_background!=(int)selected && selected!=ONLINE_BACKGROUND_OFF) {
         if(selected==ONLINE_BACKGROUND_CUSTOM) {
             lv_image_set_src(background_image,custom);
             lv_image_set_scale(background_image,256);
@@ -146,49 +157,93 @@ static void refresh(lv_timer_t *timer) {
     visibility(face_layer,home && !setup && !whale);visibility(whale_layer,home && !setup && whale);
     /* Normal phases belong to the character and icons; actionable faults keep
      * their explanation, including audio errors reported in the ready phase. */
-    bool detail=s.feedback_visible || s.phase==ONLINE_THINKING || s.phase==ONLINE_ERROR || s.phase==ONLINE_CONNECTING ||
+    bool detail=!buttons_available || s.feedback_visible || s.phase==ONLINE_ERROR || s.phase==ONLINE_CONNECTING ||
         (s.phase==ONLINE_READY && !s.audio_ok);
-    visibility(caption,home && !setup && detail);visibility(setup_panel,home && setup);
-    visibility(phase_icon.obj,home && !setup && !detail && (s.phase!=ONLINE_READY || s.mic));
-    visibility(home_controls,home && !setup && buttons_available);
-    lv_obj_set_y(home_controls,detail?294:284);
+    visibility(caption,home && !setup && s.overlay && detail);visibility(setup_panel,home && setup);
+    visibility(phase_icon.obj,home && !setup && s.overlay && !detail && (s.phase!=ONLINE_READY || s.mic));
+    visibility(home_controls,home && !setup && s.overlay && buttons_available);
     ui_icon_update(&link_icon,UI_LINK,s.linked,s.linked?0x28715E:INK);
-    ui_icon_update(&mic_icon,UI_MIC,s.mic,INK);
-    ui_icon_update(&action_mic,UI_MIC,s.mic,INK);
+    ui_icon_update(&mic_icon,UI_MIC,s.mic || s.ptt_recording,INK);
+    ui_icon_update(&action_mic,UI_MIC,s.mic || s.ptt_recording,INK);
     ui_icon_update(&volume_icon,UI_VOLUME_LEVEL,s.volume,INK);
     ui_icon_kind_t phase=s.phase==ONLINE_THINKING?UI_THINKING:
         s.phase==ONLINE_SPEAKING?UI_VOLUME:UI_LISTEN;
     ui_icon_update(&phase_icon,phase,s.phase==ONLINE_THINKING?(int)((now/350)%3):s.phase==ONLINE_SPEAKING?100:s.mic,INK);
     if(home && !setup && whale) {
         static int displayed_frame=-1;
-        online_avatar_t frame=online_avatar_frame(s.phase,s.mic,s.level,now);
+        online_avatar_t frame=online_avatar_frame(s.phase,s.mic || s.ptt_recording,s.level,now);
         if(displayed_frame!=(int)frame) {
             lv_image_set_src(whale_image,whale_avatar_view_source(frame));
             displayed_frame=frame;
         }
     }
-    visibility(footer,home && (setup || !buttons_available));visibility(settings_layer,menu.page==ONLINE_SETTINGS);
+    visibility(footer,home && setup);visibility(settings_layer,menu.page==ONLINE_SETTINGS || menu.page==ONLINE_DISPLAY || menu.page==ONLINE_CONNECTION);
     visibility(confirm_layer,menu.page==ONLINE_CONFIRM);
-    if(menu.page==ONLINE_SETTINGS) {
-        text_changed(settings_help,s.brightness_save_failed?"亮度未保存，请重试":s.background_save_failed?"背景未保存，请重试":s.idle_save_failed?"息屏未保存，请重试":s.theme_save_failed?"界面未保存，请重试":"选择项目，按确定进入");
-        lv_label_set_text_fmt(wifi_value,"Wi-Fi：%s",s.configured?s.ssid:"未配置");
-        lv_label_set_text_fmt(password_value,"Wi-Fi 密码：%s",!s.configured?"未配置":s.password_set?"已保存":"开放网络");
-        lv_label_set_text_fmt(host_value,"电脑：%s",s.configured?s.host:"未配置");
-        lv_label_set_text_fmt(token_value,"配对码：%s",s.configured&&s.token_set?"已保存":"未配置");
-        text_changed(lv_obj_get_child(settings_choices[ONLINE_MENU_THEME],0),whale?"界面：鲸鱼娘":"界面：薄荷表情");
-        const char *background_labels[]={"背景：晴海茶室","背景：星夜鲸梦","背景：自定义"};
-        text_changed(lv_obj_get_child(settings_choices[ONLINE_MENU_BACKGROUND],0),background_labels[selected]);
-        lv_label_set_text_fmt(lv_obj_get_child(settings_choices[ONLINE_MENU_BRIGHTNESS],0),"亮度：%u%%",online_brightness_normalize(s.brightness));
+    if(menu.page==ONLINE_SETTINGS || menu.page==ONLINE_DISPLAY || menu.page==ONLINE_CONNECTION) {
+        bool display=menu.page==ONLINE_DISPLAY;
+        bool connection=menu.page==ONLINE_CONNECTION;
+        text_changed(settings_help,connection?"当前状态与操作":s.cues_save_failed?"提示音未保存，请重试":s.overlay_save_failed?"设置未保存，请重试":s.brightness_save_failed?"亮度未保存，请重试":s.background_save_failed?"背景未保存，请重试":s.idle_save_failed?"息屏未保存，请重试":s.theme_save_failed?"界面未保存，请重试":"选择项目，按确定进入");
+        text_changed(settings_footer,connection?"上/下翻页 · 确定返回":"上/下选择 · 确定进入");
+        visibility(settings_footer,!connection);visibility(configuration,connection);visibility(connection_back,connection);visibility(settings_list,!connection);
+        static char status[1024];
+        if(connection)snprintf(status,sizeof(status),
+            "Wi-Fi：%s\nWi-Fi 密码：%s\n电脑：%s\n配对码：%s\n\n"
+            "操作说明\n"
+            "首页操作\n"
+            "确定：开关麦克风\n"
+            "上键：循环音量\n"
+            "下键短按：取消\n"
+            "按住下键说话，松开发送\n"
+            "长按确定：打开设置\n\n"
+            "设置操作\n"
+            "上/下键：选择项目\n"
+            "确定：进入或切换\n"
+            "长按确定：返回首页\n"
+            "息屏后先按键唤醒\n\n"
+            "系统设置\n"
+            "切换角色、背景和亮度\n"
+            "选择息屏时间\n"
+            "界面提示可隐藏图标\n"
+            "提示音可统一关闭操作声音\n\n"
+            "连接配置\n"
+            "状态信息查看配置\n"
+            "重新配置需要确认\n"
+            "手机连接设备热点\n"
+            "浏览器打开 192.168.4.1\n"
+            "填写电脑地址和配对码\n\n"
+            "上传背景\n"
+            "选择上传背景进入热点\n"
+            "浏览器打开 192.168.4.1\n"
+            "选择自定义背景并上传\n"
+            "保存后重启，连接保留",
+            s.configured?s.ssid:"未配置",
+            !s.configured?"未配置":s.password_set?"已保存":"开放网络",
+            s.configured?s.host:"未配置",
+            s.configured&&s.token_set?"已保存":"未配置");
+        if(connection)text_changed(status_text,status);
+        const char *root_choices[]={"系统设置","状态信息","上传背景","返回首页","重新配置"};
+        for(unsigned i=0;i<ONLINE_DISPLAY_COUNT;i++)visibility(settings_choices[i],display || i<ONLINE_MENU_COUNT);
+        if(!display)for(unsigned i=0;i<ONLINE_MENU_COUNT;i++)text_changed(lv_obj_get_child(settings_choices[i],0),root_choices[i]);
+        if(display) {
+        text_changed(lv_obj_get_child(settings_choices[ONLINE_DISPLAY_THEME],0),whale?"界面：鲸鱼娘":"界面：薄荷表情");
+        const char *background_labels[]={"背景：晴海茶室","背景：星夜鲸梦","背景：自定义","背景：关闭"};
+        text_changed(lv_obj_get_child(settings_choices[ONLINE_DISPLAY_BACKGROUND],0),background_labels[selected]);
+        lv_label_set_text_fmt(lv_obj_get_child(settings_choices[ONLINE_DISPLAY_BRIGHTNESS],0),"亮度：%u%%",online_brightness_normalize(s.brightness));
         static const char *const idle_labels[]={"息屏：1 分钟","息屏：3 分钟","息屏：10 分钟","息屏：不息屏"};
-        text_changed(lv_obj_get_child(settings_choices[ONLINE_MENU_IDLE],0),idle_labels[online_idle_normalize(s.idle)]);
+        text_changed(lv_obj_get_child(settings_choices[ONLINE_DISPLAY_IDLE],0),idle_labels[online_idle_normalize(s.idle)]);
+        text_changed(lv_obj_get_child(settings_choices[ONLINE_DISPLAY_OVERLAY],0),s.overlay?"界面提示：开":"界面提示：关");
+        text_changed(lv_obj_get_child(settings_choices[ONLINE_DISPLAY_CUE],0),s.cues?"提示音：开":"提示音：关");
+        text_changed(lv_obj_get_child(settings_choices[ONLINE_DISPLAY_BACK],0),"返回设置");
+        }
     }
-    static int settings_selected=-1,confirm_selected=-1;
-    if(menu.page==ONLINE_SETTINGS && settings_selected!=(int)menu.selected) {
-        for(unsigned i=0;i<ONLINE_MENU_COUNT;i++) {
+    static int settings_selected=-1,settings_page=-1,confirm_selected=-1;
+    if((menu.page==ONLINE_SETTINGS || menu.page==ONLINE_DISPLAY) && (settings_selected!=(int)menu.selected || settings_page!=(int)menu.page)) {
+        unsigned count=menu.page==ONLINE_DISPLAY?ONLINE_DISPLAY_COUNT:ONLINE_MENU_COUNT;
+        for(unsigned i=0;i<count;i++) {
             lv_obj_set_style_bg_color(settings_choices[i],lv_color_hex(menu.selected==i?INK:PAPER),0);
             lv_obj_set_style_text_color(lv_obj_get_child(settings_choices[i],0),lv_color_hex(menu.selected==i?PAPER:INK),0);
         }
-        settings_selected=menu.selected;
+        settings_selected=menu.selected;settings_page=menu.page;
         lv_obj_scroll_to_view(settings_choices[menu.selected],LV_ANIM_OFF);
     }
     if(menu.page==ONLINE_CONFIRM && confirm_selected!=(int)menu.selected) {
@@ -215,8 +270,8 @@ static void refresh(lv_timer_t *timer) {
     visibility(mouth,speaking);
     visibility(smile,!speaking);
     visibility(tongue,speaking);
-    text_changed(caption,s.message[0]?s.message:online_phase_text(s.phase));
-    text_changed(footer,!buttons_available?"按键不可用，请检查设备":"长按确定 · 设置");
+    text_changed(caption,!buttons_available?"按键不可用，请检查设备":s.message[0]?s.message:online_phase_text(s.phase));
+    text_changed(footer,"长按确定 · 设置");
 }
 static void update_battery(lv_timer_t *timer) {
     (void)timer;if(atomic_load(&screen_asleep))return;
@@ -236,7 +291,7 @@ void online_ui_enter(bool buttons_ok) {
     lv_obj_move_background(background_image);
     /* Individual rect blending keeps the photo visible without allocating an
      * off-screen layer; retain enough tint for text over dark custom images. */
-    lv_obj_t *header=shape(screen,0,0,240,35,0xE7F0FF,0);
+    header=shape(screen,0,0,240,35,0xE7F0FF,0);
     lv_obj_set_style_bg_opa(header,LV_OPA_70,0);
     lv_obj_move_to_index(header,1);
     lv_obj_move_foreground(title);
@@ -268,9 +323,11 @@ void online_ui_enter(bool buttons_ok) {
     whale_image=lv_image_create(whale_layer);
     lv_obj_set_pos(whale_image,0,0);
     lv_image_set_src(whale_image,whale_avatar_view_source(ONLINE_AVATAR_IDLE));
-    caption=label(screen,"",12,246,216,46,false,INK);
+    caption=label(screen,"",12,246,216,38,false,INK);
     lv_obj_set_style_bg_color(caption,lv_color_hex(PAPER),0);
-    lv_obj_set_style_bg_opa(caption,LV_OPA_70,0);
+    lv_obj_set_style_bg_opa(caption,LV_OPA_60,0);
+    lv_obj_set_style_radius(caption,8,0);
+    lv_label_set_long_mode(caption,LV_LABEL_LONG_SCROLL_CIRCULAR);
     ui_icon_create(screen,&phase_icon,UI_MIC,178,8,20);
     setup_panel=shape(screen,8,42,224,240,PAPER,14);
     label(setup_panel,"连接设备热点",8,10,208,24,false,INK);
@@ -298,21 +355,22 @@ void online_ui_enter(bool buttons_ok) {
     ui_icon_create(down_hint,&stop_icon,UI_STOP,34,3,20);
     settings_layer=shape(screen,0,35,240,285,YELLOW,0);
     settings_help=label(settings_layer,"",8,0,224,22,false,INK);
-    lv_obj_t *configuration=shape(settings_layer,8,26,224,114,PAPER,12);
-    wifi_value=label(configuration,"",8,4,208,22,false,INK);
-    password_value=label(configuration,"",8,26,208,22,false,INK);
-    host_value=label(configuration,"",8,48,208,40,false,INK);
-    token_value=label(configuration,"",8,88,208,22,false,INK);
-    lv_label_set_long_mode(wifi_value,LV_LABEL_LONG_DOT);
+    configuration=shape(settings_layer,8,26,224,210,PAPER,12);
+    lv_obj_add_flag(configuration,LV_OBJ_FLAG_SCROLLABLE);lv_obj_set_scroll_dir(configuration,LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(configuration,LV_SCROLLBAR_MODE_AUTO);
+    status_text=label(configuration,"",8,8,208,0,false,INK);
+    lv_obj_set_height(status_text,LV_SIZE_CONTENT);
+    connection_back=shape(settings_layer,16,242,208,30,INK,9);
+    label(connection_back,"返回设置",4,4,200,22,false,PAPER);
     settings_list=lv_obj_create(settings_layer);lv_obj_remove_style_all(settings_list);
-    lv_obj_set_pos(settings_list,0,146);lv_obj_set_size(settings_list,240,110);
+    lv_obj_set_pos(settings_list,0,26);lv_obj_set_size(settings_list,240,230);
     lv_obj_set_scrollbar_mode(settings_list,LV_SCROLLBAR_MODE_OFF);
-    const char *choices[]={"界面：鲸鱼娘","背景：晴海茶室","亮度：100%","息屏：1 分钟","上传背景","返回首页","重新配置"};
-    for(unsigned i=0;i<ONLINE_MENU_COUNT;i++) {
+    const char *choices[]={"系统设置","状态信息","上传背景","返回首页","重新配置","",""};
+    for(unsigned i=0;i<ONLINE_DISPLAY_COUNT;i++) {
         settings_choices[i]=shape(settings_list,16,i*28,208,26,PAPER,9);
         label(settings_choices[i],choices[i],4,2,200,22,false,INK);
     }
-    label(settings_layer,"上/下选择 · 确定进入",8,262,224,22,false,INK);
+    settings_footer=label(settings_layer,"上/下选择 · 确定进入",8,262,224,22,false,INK);
     confirm_layer=shape(screen,0,35,240,285,YELLOW,0);
     label(confirm_layer,"连接热点，无需密码\n浏览器打开 192.168.4.1\n取消保留当前配置",12,50,216,78,false,INK);
     const char *confirm[]={"取消，保留当前配置","确认重新配置"};
@@ -328,11 +386,22 @@ void online_ui_enter(bool buttons_ok) {
 void online_ui_key(bsp_btn_t key,bsp_btn_ev_t ev) {
     /* This callback owns the gesture flag. RELEASE precedes CLICK, so retain it
      * until the next PRESS and suppress both short and long wake gestures. */
-    static bool wake_gesture;
+    static bool wake_gesture,down_home,down_long;
     if(ev==BSP_BTN_PRESS) {
         wake_gesture=atomic_load(&screen_asleep);
-        atomic_store(&pending_activity,true);return;
+        atomic_store(&pending_activity,true);
+        if(key==BSP_BTN_DOWN) {
+            down_long=false;down_home=!wake_gesture && atomic_load(&ptt_home);
+            if(down_home)online_ptt_press();
+        }
+        return;
     }
+    if(key==BSP_BTN_DOWN && down_home) {
+        if(ev==BSP_BTN_LONG && !wake_gesture) {down_long=true;online_ptt_start();atomic_store(&pending_activity,true);return;}
+        if(ev==BSP_BTN_RELEASE) {online_ptt_release();return;}
+        if(ev==BSP_BTN_CLICK) {down_home=false;down_long=false;return;}
+    }
+    if(key==BSP_BTN_DOWN && down_long && ev==BSP_BTN_CLICK) {down_long=false;return;}
     unsigned command=0;
     if(ev==BSP_BTN_LONG && key==BSP_BTN_OK)command=ONLINE_KEY_LONG;
     else if(ev==BSP_BTN_CLICK)command=key==BSP_BTN_OK?ONLINE_KEY_OK:key==BSP_BTN_UP?ONLINE_KEY_UP:ONLINE_KEY_DOWN;

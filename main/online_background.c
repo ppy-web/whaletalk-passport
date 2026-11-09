@@ -12,7 +12,7 @@ online_background_t online_background_load(void) {
     return online_background_normalize(value);
 }
 bool online_background_save(online_background_t background) {
-    if((unsigned)background>ONLINE_BACKGROUND_CUSTOM)return false;
+    if((unsigned)background>ONLINE_BACKGROUND_OFF)return false;
     nvs_handle_t handle;
     if(nvs_open("dsh_voice",NVS_READWRITE,&handle)!=ESP_OK)return false;
     esp_err_t result=nvs_set_u8(handle,"background",(uint8_t)background);

@@ -4,14 +4,16 @@
 #include <stdio.h>
 #include <string.h>
 
-static bool present[3],fail_open,fail_set,fail_commit;
-static uint8_t stored[3],pending;
+static bool present[5],fail_open,fail_set,fail_commit;
+static uint8_t stored[5],pending;
 static int pending_key;
 static unsigned open_handles;
 static int key_index(const char *key) {
     if(!strcmp(key,"theme"))return 0;
     if(!strcmp(key,"idle"))return 1;
     if(!strcmp(key,"brightness"))return 2;
+    if(!strcmp(key,"overlay"))return 3;
+    if(!strcmp(key,"cues"))return 4;
     return -1;
 }
 
@@ -86,6 +88,18 @@ int main(void) {
     fail_set=false;fail_open=true;assert(!online_brightness_save(75));assert(online_brightness_load()==100);
     fail_open=false;stored[2]=0;present[2]=true;assert(online_brightness_load()==100);
     assert(!online_brightness_save(0) && !online_brightness_save(101));
+    assert(online_overlay_load());
+    assert(online_overlay_save(false) && !online_overlay_load());
+    fail_commit=true;assert(!online_overlay_save(true) && !online_overlay_load());
+    fail_commit=false;assert(online_overlay_save(true) && online_overlay_load());
+    stored[3]=255;assert(online_overlay_load());
+    assert(online_cues_load());
+    assert(online_cues_save(false) && !online_cues_load());
+    fail_set=true;assert(!online_cues_save(true) && !online_cues_load());fail_set=false;
+    fail_commit=true;assert(!online_cues_save(true) && !online_cues_load());fail_commit=false;
+    assert(online_cues_save(true) && online_cues_load());
+    stored[4]=255;assert(online_cues_load());
+    fail_open=true;assert(online_cues_load() && !online_cues_save(false));fail_open=false;
     assert(!open_handles);
     puts("Theme persistence, fallback, failure handling and handle cleanup: PASS");
 }

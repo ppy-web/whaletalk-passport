@@ -21,6 +21,22 @@ Microphone input is PCM16LE mono 16,000 Hz in base64
 `input_audio_buffer.append` messages. The Host performs segmentation and ASR.
 Mute/unmute, wake and `response.cancel` are control events.
 
+## Optional push-to-talk
+
+The device advertises `input.push_to_talk`; it is enabled only when echoed by
+`session.ready`. A held DOWN gesture cancels any previous turn, then sends
+`input_audio_buffer.start` with an increasing decimal-string `captureId`.
+The connector sends `voice.ptt.started` with that ID before accepting a final
+`input_audio_buffer.commit` with the same ID. Audio uses the existing append
+messages. Manual capture does not commit on silence. Empty capture returns
+`voice.ptt.empty` with the ID; stale starts and commits cannot affect a newer
+capture. Cancellation, disconnection, duration limits and queue overflow
+discard unfinished audio. The normal microphone setting is not changed:
+while it is muted, the manual response is still played and acknowledged.
+The device buffers the pre-long-press audio locally and does not upload it for
+a short cancellation press. Pre-roll and playback reuse one bounded 32-frame
+queue. A failed or incompatible negotiation leaves ordinary controls intact.
+
 After final reply text is ready, supported Host providers stream PCM16LE mono 24,000 Hz; other models convert the complete WAV.
 `response.started` defines `responseId`; matching `audio.delta` messages carry
 `sampleRate` and base64 PCM, followed by `audio.done`. The device fences stale
@@ -44,7 +60,7 @@ These HTTP routes exist only in the device's provisioning hotspot and are
 independent of the DSH audio protocol:
 
 - `GET /appearance` opens background selection/upload. `GET /current` adds
-  `background` (0 = Seaside Tea, 1 = Moonlit Dream, 2 = custom) and
+  `background` (0 = Seaside Tea, 1 = Moonlit Dream, 2 = custom, 3 = off) and
   `customBackground` (a usable custom image is present).
 - `POST /background/upload` requires the current `X-Setup-Nonce` and exactly
   6,184 binary bytes. WTBG v1 starts with `57 54 42 47 01 60 80 10`, followed
@@ -53,7 +69,7 @@ independent of the DSH audio protocol:
   interrupted uploads and storage errors never trigger a reboot or erase
   connection settings. NVS stores the bounded blob under `dsh_voice/bg_custom`.
 - `POST /background/apply` requires the same nonce and JSON
-  `{"background":0|1|2}`. Custom selection requires a usable or newly uploaded
+  `{"background":0|1|2|3}`. Custom selection requires a usable or newly uploaded
   image. A successful preference save schedules a reboot; saved Wi-Fi,
   pairing, endpoint and device identity are reused. No active credentials
   are required in this request.

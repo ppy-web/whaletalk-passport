@@ -116,10 +116,10 @@ static esp_err_t background_apply(httpd_req_t *r) {
     }
     body[used]=0;cJSON *json=cJSON_ParseWithOpts(body,NULL,true),*value=cJSON_GetObjectItemCaseSensitive(json,"background");
     int choice=cJSON_IsNumber(value)?value->valueint:-1;
-    bool valid=cJSON_IsNumber(value) && value->valuedouble==choice && choice>=0 && choice<=ONLINE_BACKGROUND_CUSTOM &&
+    bool valid=cJSON_IsNumber(value) && value->valuedouble==choice && choice>=0 && choice<=ONLINE_BACKGROUND_OFF &&
         (choice!=ONLINE_BACKGROUND_CUSTOM || uploaded_background || online_background_custom_available());
     cJSON_Delete(json);
-    if(!valid)return httpd_resp_send_err(r,HTTPD_400_BAD_REQUEST,"请先上传自定义背景或选择内置背景");
+    if(!valid)return httpd_resp_send_err(r,HTTPD_400_BAD_REQUEST,"请先上传自定义背景或选择其他选项");
     if(!online_background_save((online_background_t)choice))return httpd_resp_send_err(r,HTTPD_500_INTERNAL_SERVER_ERROR,"背景未保存，请重试");
     saved=true;httpd_resp_set_type(r,"text/plain; charset=utf-8");
     httpd_resp_sendstr(r,has_previous?"背景已保存，设备即将重启并沿用原连接信息。":"背景已保存，设备重启后可继续配置连接。");

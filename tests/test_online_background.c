@@ -66,6 +66,9 @@ int main(void) {
     assert(online_background_save(ONLINE_BACKGROUND_NIGHT));
     assert(online_background_store(image,sizeof(image)));
     assert(online_background_load()==ONLINE_BACKGROUND_NIGHT);
+    assert(online_background_save(ONLINE_BACKGROUND_OFF));
+    assert(online_background_load()==ONLINE_BACKGROUND_OFF);
+    assert(online_background_save(ONLINE_BACKGROUND_NIGHT));
     fail_commit=true;assert(!online_background_save(ONLINE_BACKGROUND_DAY));
     assert(online_background_load()==ONLINE_BACKGROUND_NIGHT);
     uint8_t previous=stored[40];image[40]=0xff;

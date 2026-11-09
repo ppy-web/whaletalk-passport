@@ -29,6 +29,7 @@
       <label class="choice"><input type="radio" name="background" value="0" checked><span>晴海茶室<small>海风、蕾丝与午后茶</small></span></label>
       <label class="choice"><input type="radio" name="background" value="1"><span>星夜鲸梦<small>月光与鲸鱼星座</small></span></label>
       <label class="choice"><input type="radio" name="background" value="2" disabled><span>自定义<small id="customHint">先上传一张图片</small></span></label>
+      <label class="choice"><input type="radio" name="background" value="3"><span>关闭背景<small>显示角色与界面底色</small></span></label>
     </fieldset>
     <figure class="preview"><img id="preview" src="/background-day.png" alt="当前选择的背景预览"><figcaption id="previewHint">背景预览，角色会叠加显示</figcaption></figure>
     <section class="upload"><h2>上传自己的图片</h2>
@@ -46,7 +47,7 @@
   const radios=Array.from(document.querySelectorAll('[name=background]'))
   let nonce='',busy=false,preparing=false,pending=null,pendingPreview='',converted='',customAvailable=false,generation=0
   function controls(){apply.disabled=!nonce||busy||preparing||!!pending;upload.disabled=!nonce||busy||preparing||!pending;file.disabled=busy||!nonce;radios.forEach(r=>r.disabled=busy||r.value==='2'&&!customAvailable)}
-  function show(){const kind=radios.find(r=>r.checked)?.value||'0';preview.style.visibility=kind==='2'&&!converted?'hidden':'visible';preview.src=kind==='0'?'/background-day.png':kind==='1'?'/background-night.png':converted||'/background-day.png';document.getElementById('previewHint').textContent=kind==='2'&&!converted?'已保存的自定义背景；设备上可查看':'背景预览，角色会叠加显示'}
+  function show(){const kind=radios.find(r=>r.checked)?.value||'0';preview.style.visibility=kind==='3'||kind==='2'&&!converted?'hidden':'visible';preview.src=kind==='0'?'/background-day.png':kind==='1'?'/background-night.png':converted||'/background-day.png';document.getElementById('previewHint').textContent=kind==='3'?'关闭背景后显示角色与界面底色':kind==='2'&&!converted?'已保存的自定义背景；设备上可查看':'背景预览，角色会叠加显示'}
   radios.forEach(r=>r.onchange=()=>{generation++;pending=null;preparing=false;show();controls();status.textContent=''})
   fetch('/current',{cache:'no-store',signal:AbortSignal.timeout(10000)}).then(r=>{if(!r.ok)throw Error();return r.json()}).then(data=>{
     nonce=data.nonce;customAvailable=!!data.customBackground

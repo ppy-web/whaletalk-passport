@@ -37,6 +37,40 @@ bool online_fragment(size_t *used,size_t cap,size_t off,size_t len,size_t total)
     if(total>=cap || off!=*used || off>total || len>total-off) { *used=0;return false; }
     *used+=len; return true;
 }
+void online_ptt_arm_state(online_ptt_control_t *p) {
+    unsigned sequence=atomic_fetch_add(&p->sequence,1)+1;
+    if(!sequence)atomic_fetch_add(&p->sequence,1);
+    atomic_store(&p->ack,0);atomic_store(&p->audio_started,false);atomic_store(&p->capture_stopped,false);
+    atomic_store(&p->mode,PTT_ARMED);
+}
+void online_ptt_start_state(online_ptt_control_t *p,bool ready) {
+    unsigned expected=PTT_ARMED;
+    if(!atomic_compare_exchange_strong(&p->mode,&expected,PTT_ACTIVE) && expected!=PTT_FAILED)
+        atomic_store(&p->problem,ready && !atomic_load(&p->supported)?1:2);
+}
+void online_ptt_release_state(online_ptt_control_t *p) {
+    unsigned expected=PTT_ARMED;
+    if(atomic_compare_exchange_strong(&p->mode,&expected,PTT_IDLE))return;
+    expected=PTT_ACTIVE;
+    if(atomic_compare_exchange_strong(&p->mode,&expected,PTT_DRAINING))return;
+    if(expected==PTT_FAILED)atomic_store(&p->mode,PTT_IDLE);
+}
+bool online_ptt_release_waiting(online_ptt_control_t *p,bool wait_cue) {
+    if(!wait_cue || atomic_load(&p->audio_started))return false;
+    unsigned expected=PTT_ACTIVE;
+    return atomic_compare_exchange_strong(&p->mode,&expected,PTT_IDLE);
+}
+void online_ptt_fail_state(online_ptt_control_t *p,unsigned problem) {
+    atomic_store(&p->problem,problem);atomic_store(&p->mode,PTT_FAILED);
+}
+bool online_ptt_frame_valid(const online_ptt_control_t *p,unsigned sequence,bool sending) {
+    unsigned mode=atomic_load(&p->mode);
+    return sequence==atomic_load(&p->sequence) && (mode==PTT_ACTIVE || mode==PTT_DRAINING || (!sending && mode==PTT_ARMED));
+}
+bool online_ptt_commit_ready(const online_ptt_control_t *p,unsigned sequence,bool empty) {
+    return empty && atomic_load(&p->mode)==PTT_DRAINING && sequence==atomic_load(&p->sequence) &&
+        atomic_load(&p->ack)==sequence && atomic_load(&p->capture_stopped);
+}
 const char *online_phase_text(online_phase_t p) {
     static const char *const names[]={"配置后端","正在连接","准备好了","你说，我在听","思考一下","正在回答","连接失败"};
     return p<=ONLINE_ERROR?names[p]:names[ONLINE_ERROR];
@@ -92,9 +126,10 @@ bool online_feedback_progress(online_feedback_t *f,const char *turn,const char *
     if(!label)return false;
     if(!strcmp(f->turn,turn) && f->settled)return false;
     if(f->turn[0] && !f->settled && strcmp(f->turn,turn))return false;
-    if(strcmp(f->turn,turn) || f->phase!=label)f->since=now;
+    bool waiting=strcmp(phase,"capturing") && strcmp(phase,"playing");
+    if(strcmp(f->turn,turn) || (waiting && !f->waiting))f->since=now;
     snprintf(f->turn,sizeof(f->turn),"%s",turn);f->phase=label;f->problem=NULL;f->settled=false;
-    f->waiting=strcmp(phase,"capturing") && strcmp(phase,"playing");
+    f->waiting=waiting;
     return true;
 }
 bool online_feedback_result(online_feedback_t *f,const char *turn,const char *result,const char *code) {
@@ -107,8 +142,10 @@ bool online_feedback_result(online_feedback_t *f,const char *turn,const char *re
     return true;
 }
 void online_feedback_text(const online_feedback_t *f,uint64_t now,char *out,size_t size) {
-    snprintf(out,size,"%s",f->problem?f->problem:f->phase?f->phase:"");
-    if(f->phase && f->waiting && now-f->since>=8000)snprintf(out,size,"%s\n耗时较长，按下键可取消",f->phase);
+    const char *text=f->problem?f->problem:"";
+    if(!f->problem && f->phase && f->waiting && now>=f->since && now-f->since>=8000 && now-f->since<11000)
+        text="耗时较长，按下键可取消";
+    snprintf(out,size,"%s",text);
 }
 
 const char *online_connection_error(int http_status,int socket_error,bool has_ip) {
@@ -151,11 +188,14 @@ online_theme_t online_theme_normalize(unsigned stored) {
     return stored==ONLINE_THEME_MINT?ONLINE_THEME_MINT:ONLINE_THEME_WHALE;
 }
 online_background_t online_background_normalize(unsigned stored) {
-    return stored<=ONLINE_BACKGROUND_CUSTOM?(online_background_t)stored:ONLINE_BACKGROUND_DAY;
+    return stored<=ONLINE_BACKGROUND_OFF?(online_background_t)stored:ONLINE_BACKGROUND_DAY;
 }
 online_background_t online_background_next(online_background_t current,bool has_custom) {
-    unsigned count=has_custom?3:2;
-    return (online_background_t)((online_background_normalize(current)+1)%count);
+    current=online_background_normalize(current);
+    if(current==ONLINE_BACKGROUND_DAY)return ONLINE_BACKGROUND_NIGHT;
+    if(current==ONLINE_BACKGROUND_NIGHT)return has_custom?ONLINE_BACKGROUND_CUSTOM:ONLINE_BACKGROUND_OFF;
+    if(current==ONLINE_BACKGROUND_CUSTOM)return ONLINE_BACKGROUND_OFF;
+    return ONLINE_BACKGROUND_DAY;
 }
 unsigned online_volume_next(unsigned current) {
     static const unsigned steps[]={0,25,50,75,90,100};
@@ -210,20 +250,28 @@ online_action_t online_menu_key(online_menu_t *m,online_key_t key) {
         if(key==ONLINE_KEY_OK)return ONLINE_ACTION_MIC;
         if(key==ONLINE_KEY_UP)return ONLINE_ACTION_VOLUME;
         if(key==ONLINE_KEY_DOWN)return ONLINE_ACTION_CANCEL;
+    } else if(m->page==ONLINE_CONNECTION) {
+        if(key==ONLINE_KEY_OK) {m->page=ONLINE_SETTINGS;m->selected=ONLINE_MENU_CONNECTION;}
     } else if(key==ONLINE_KEY_UP || key==ONLINE_KEY_DOWN) {
-        unsigned count=m->page==ONLINE_SETTINGS?ONLINE_MENU_COUNT:2;
+        unsigned count=m->page==ONLINE_SETTINGS?ONLINE_MENU_COUNT:m->page==ONLINE_DISPLAY?ONLINE_DISPLAY_COUNT:2;
         m->selected=(m->selected+(key==ONLINE_KEY_DOWN?1:count-1))%count;
     }
     else if(key==ONLINE_KEY_OK) {
         if(m->page==ONLINE_SETTINGS) {
-            if(m->selected==ONLINE_MENU_THEME)return ONLINE_ACTION_THEME;
-            if(m->selected==ONLINE_MENU_BACKGROUND)return ONLINE_ACTION_BACKGROUND;
-            if(m->selected==ONLINE_MENU_BRIGHTNESS)return ONLINE_ACTION_BRIGHTNESS;
-            if(m->selected==ONLINE_MENU_IDLE)return ONLINE_ACTION_IDLE;
+            if(m->selected==ONLINE_MENU_DISPLAY) {m->page=ONLINE_DISPLAY;m->selected=0;return ONLINE_ACTION_NONE;}
+            if(m->selected==ONLINE_MENU_CONNECTION) {m->page=ONLINE_CONNECTION;m->selected=0;return ONLINE_ACTION_NONE;}
             if(m->selected==ONLINE_MENU_UPLOAD) {
                 m->page=ONLINE_HOME;m->selected=0;return ONLINE_ACTION_SETUP;
             }
             m->page=m->selected==ONLINE_MENU_SETUP?ONLINE_CONFIRM:ONLINE_HOME;m->selected=0;
+        } else if(m->page==ONLINE_DISPLAY) {
+            if(m->selected==ONLINE_DISPLAY_THEME)return ONLINE_ACTION_THEME;
+            if(m->selected==ONLINE_DISPLAY_BACKGROUND)return ONLINE_ACTION_BACKGROUND;
+            if(m->selected==ONLINE_DISPLAY_BRIGHTNESS)return ONLINE_ACTION_BRIGHTNESS;
+            if(m->selected==ONLINE_DISPLAY_IDLE)return ONLINE_ACTION_IDLE;
+            if(m->selected==ONLINE_DISPLAY_OVERLAY)return ONLINE_ACTION_OVERLAY;
+            if(m->selected==ONLINE_DISPLAY_CUE)return ONLINE_ACTION_CUE;
+            m->page=ONLINE_SETTINGS;m->selected=ONLINE_MENU_DISPLAY;
         } else if(m->selected) {
             m->page=ONLINE_HOME;m->selected=0;return ONLINE_ACTION_SETUP;
         } else {m->page=ONLINE_SETTINGS;m->selected=ONLINE_MENU_SETUP;}

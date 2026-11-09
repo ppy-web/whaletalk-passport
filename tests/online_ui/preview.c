@@ -8,6 +8,7 @@
 static online_status_t fixture;
 static int battery_value=87;
 static unsigned toggles,cancels,volumes,setups,themes;
+static unsigned ptt_presses,ptt_starts,ptt_releases;
 static unsigned idle_changes,brightness_changes;
 static uint8_t custom_data[ONLINE_BG_BYTES];
 const uint8_t *online_background_data(void){return fixture.custom_background?custom_data:NULL;}
@@ -25,21 +26,36 @@ void online_setup(void){setups++;}
 void online_cycle_theme(void){fixture.theme=online_theme_next(fixture.theme);themes++;}
 void online_cycle_idle(void){fixture.idle=online_idle_next(fixture.idle);idle_changes++;}
 void online_cycle_brightness(void){fixture.brightness=online_brightness_next(fixture.brightness);brightness_changes++;}
+void online_toggle_overlay(void){fixture.overlay=!fixture.overlay;}
+void online_toggle_cues(void){fixture.cues=!fixture.cues;}
+void online_ptt_press(void){ptt_presses++;cancels++;}
+void online_ptt_start(void){ptt_starts++;fixture.ptt_recording=true;}
+void online_ptt_release(void){ptt_releases++;fixture.ptt_recording=false;}
+void online_ptt_abort(void){}
 static void check_labels(lv_obj_t *o){
     if(!lv_obj_is_visible(o))return;
     if(lv_obj_check_type(o,&lv_label_class)){
         const char *s=lv_label_get_text(o);lv_area_t a;lv_obj_get_coords(o,&a);
-        assert(a.x1>=0 && a.y1>=0 && a.x2<240 && a.y2<320);
+        assert(a.x1>=0 && a.y1>=0 && a.x2<240);
+        if(!lv_obj_has_flag(lv_obj_get_parent(o),LV_OBJ_FLAG_SCROLLABLE))assert(a.y2<320);
         lv_point_t dim;const lv_font_t *f=lv_obj_get_style_text_font(o,0);
         lv_text_get_size(&dim,s,f,0,lv_obj_get_style_text_line_space(o,0),lv_obj_get_width(o),LV_TEXT_FLAG_NONE);
-        if(lv_label_get_long_mode(o)==LV_LABEL_LONG_DOT)dim.y=lv_obj_get_height(o);
+        if(lv_label_get_long_mode(o)==LV_LABEL_LONG_DOT || lv_label_get_long_mode(o)==LV_LABEL_LONG_SCROLL_CIRCULAR)dim.y=lv_obj_get_height(o);
         if(dim.y>lv_obj_get_height(o))fprintf(stderr,"Clipped: %s %d > %d\n",s,(int)dim.y,(int)lv_obj_get_height(o));
         assert(dim.y<=lv_obj_get_height(o));
         for(uint32_t i=0;s[i];){uint32_t cp=lv_text_encoded_next(s,&i);if(cp=='\n')continue;
-            lv_font_glyph_dsc_t d;assert(lv_font_get_glyph_dsc(f,&d,cp,0) && !d.is_placeholder);
+            lv_font_glyph_dsc_t d;
+            if(!lv_font_get_glyph_dsc(f,&d,cp,0) || d.is_placeholder) {
+                fprintf(stderr,"Missing glyph U+%04X in: %s\n",(unsigned)cp,s);
+                assert(false);
+            }
         }
         lv_obj_t *p=lv_obj_get_parent(o);lv_area_t parent;lv_obj_get_coords(p,&parent);
-        assert(a.x1>=parent.x1 && a.y1>=parent.y1 && a.x2<=parent.x2 && a.y2<=parent.y2);
+        if(lv_obj_has_flag(p,LV_OBJ_FLAG_SCROLLABLE)) {
+            assert(a.x1>=parent.x1 && a.x2<=parent.x2);
+        } else {
+            assert(a.x1>=parent.x1 && a.y1>=parent.y1 && a.x2<=parent.x2 && a.y2<=parent.y2);
+        }
     }
     for(unsigned i=0;i<lv_obj_get_child_count(o);i++) {
         lv_obj_t *a=lv_obj_get_child(o,i);
@@ -67,7 +83,7 @@ static void snap(const char *name){
     fclose(f);lv_draw_buf_destroy(b);
 }
 int main(void) {
-    lv_init();assert(lv_display_create(240,320));fixture.volume=75;fixture.audio_ok=true;
+    lv_init();assert(lv_display_create(240,320));fixture.volume=75;fixture.audio_ok=true;fixture.overlay=true;fixture.cues=true;
     online_ui_enter(true);
     for(unsigned frame=0;frame<ONLINE_AVATAR_COUNT;frame++) {
         lv_image_decoder_dsc_t decoder;
@@ -110,7 +126,7 @@ int main(void) {
             char name[48];snprintf(name,sizeof(name),"%s-%s",theme==ONLINE_THEME_WHALE?"whale":"mint",names[i]);snap(name);
             assert(lv_obj_has_flag(whale_layer,LV_OBJ_FLAG_HIDDEN)==(i==ONLINE_SETUP || theme!=ONLINE_THEME_WHALE));
             assert(lv_obj_has_flag(face_layer,LV_OBJ_FLAG_HIDDEN)==(i==ONLINE_SETUP || theme!=ONLINE_THEME_MINT));
-            assert(lv_obj_has_flag(caption,LV_OBJ_FLAG_HIDDEN)==(i!=ONLINE_ERROR && i!=ONLINE_CONNECTING && i!=ONLINE_THINKING));
+            assert(lv_obj_has_flag(caption,LV_OBJ_FLAG_HIDDEN)==(i!=ONLINE_ERROR && i!=ONLINE_CONNECTING));
             assert(lv_obj_has_flag(home_controls,LV_OBJ_FLAG_HIDDEN)==(i==ONLINE_SETUP));
         }
     }
@@ -118,7 +134,7 @@ int main(void) {
     snprintf(fixture.message,sizeof(fixture.message),"%s",online_error_text("passport-no-speech"));refresh(NULL);snap("recognition-error");
     assert(!lv_obj_has_flag(caption,LV_OBJ_FLAG_HIDDEN));
     fixture.phase=ONLINE_THINKING;
-    snprintf(fixture.message,sizeof(fixture.message),"正在识别\n耗时较长，按下键可取消");refresh(NULL);snap("recognition-slow");
+    snprintf(fixture.message,sizeof(fixture.message),"耗时较长，按下键可取消");refresh(NULL);snap("recognition-slow");
     fixture.feedback_visible=false;
     for(unsigned i=0;i<32;i++) {
         clock_us=(int64_t)i*100000;refresh(NULL);
@@ -128,7 +144,12 @@ int main(void) {
     unsigned cancelled_while_thinking=cancels;
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
     assert(cancels==cancelled_while_thinking+1 && fixture.phase==ONLINE_THINKING);
-    fixture.background=ONLINE_BACKGROUND_NIGHT;refresh(NULL);snap("background-night");
+    fixture.background=ONLINE_BACKGROUND_OFF;refresh(NULL);
+    assert(lv_obj_has_flag(background_image,LV_OBJ_FLAG_HIDDEN));snap("background-off-whale");
+    fixture.theme=ONLINE_THEME_MINT;refresh(NULL);snap("background-off-mint");
+    assert(!lv_obj_has_flag(face_layer,LV_OBJ_FLAG_HIDDEN));
+    fixture.theme=ONLINE_THEME_WHALE;fixture.background=ONLINE_BACKGROUND_NIGHT;refresh(NULL);
+    assert(!lv_obj_has_flag(background_image,LV_OBJ_FLAG_HIDDEN));snap("background-night");
     fixture.custom_background=true;fixture.background=ONLINE_BACKGROUND_CUSTOM;
     const uint8_t bg_header[]={'W','T','B','G',1,96,128,16};memcpy(custom_data,bg_header,sizeof(bg_header));
     custom_data[8]=0xff;custom_data[9]=0xcf;custom_data[10]=0x1f;custom_data[11]=0xf7;
@@ -159,7 +180,8 @@ int main(void) {
     online_ui_key(BSP_BTN_OK,BSP_BTN_PRESS);refresh(NULL);
     online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);
     assert(menu.page==ONLINE_SETTINGS);
-    online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);assert(menu.selected==ONLINE_MENU_BACKGROUND);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);
+    online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);assert(menu.selected==ONLINE_DISPLAY_BACKGROUND);
     snap("custom-settings-offline");
     online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);assert(menu.page==ONLINE_HOME);
     fixture.phase=ONLINE_THINKING;
@@ -191,12 +213,50 @@ int main(void) {
     fixture.audio_ok=false;strcpy(fixture.message,"音频不可用，请检查设备");refresh(NULL);
     assert(!lv_obj_has_flag(caption,LV_OBJ_FLAG_HIDDEN));snap("audio-unavailable");
     fixture.audio_ok=true;fixture.message[0]=0;refresh(NULL);assert(lv_obj_has_flag(caption,LV_OBJ_FLAG_HIDDEN));
+    fixture.phase=ONLINE_ERROR;
+    strcpy(fixture.message,"后端断开，正在重连后端断开，正在重连");
+    refresh(NULL);snap("long-message");
+    assert(!lv_obj_has_flag(caption,LV_OBJ_FLAG_HIDDEN));
+    fixture.phase=ONLINE_READY;fixture.message[0]=0;refresh(NULL);
     online_ui_key(BSP_BTN_OK,BSP_BTN_PRESS);assert(!toggles);
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(toggles==1);
     online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);refresh(NULL);assert(volumes==1);
     unsigned before_cancel=cancels;
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);assert(cancels==before_cancel+1);
+    before_cancel=cancels;
+    online_ui_key(BSP_BTN_DOWN,BSP_BTN_PRESS);refresh(NULL);
+    online_ui_key(BSP_BTN_DOWN,BSP_BTN_RELEASE);online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
+    assert(cancels==before_cancel+1 && ptt_presses==1 && ptt_starts==0 && ptt_releases==1);
+    before_cancel=cancels;
+    online_ui_key(BSP_BTN_DOWN,BSP_BTN_PRESS);refresh(NULL);
+    fixture.feedback_visible=true;strcpy(fixture.message,"正在录音，松开发送");
+    online_ui_key(BSP_BTN_DOWN,BSP_BTN_LONG);refresh(NULL);assert(fixture.ptt_recording);
+    assert(!lv_obj_has_flag(caption,LV_OBJ_FLAG_HIDDEN) && !lv_obj_has_flag(home_controls,LV_OBJ_FLAG_HIDDEN));snap("push-to-talk");
+    online_ui_key(BSP_BTN_DOWN,BSP_BTN_RELEASE);online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
+    assert(cancels==before_cancel+1 && ptt_presses==2 && ptt_starts==1 && ptt_releases==2 && !fixture.ptt_recording);
+    fixture.feedback_visible=false;fixture.message[0]=0;
     online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);assert(setups==0);
+    snap("settings-root");
+    assert(lv_obj_has_flag(configuration,LV_OBJ_FLAG_HIDDEN));
+    online_ui_key(BSP_BTN_DOWN,BSP_BTN_PRESS);online_ui_key(BSP_BTN_DOWN,BSP_BTN_RELEASE);
+    online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(menu.page==ONLINE_CONNECTION);
+    assert(!lv_obj_has_flag(configuration,LV_OBJ_FLAG_HIDDEN));snap("status-empty");
+    assert(strstr(lv_label_get_text(status_text),"操作说明"));
+    assert(strstr(lv_label_get_text(status_text),"按住下键说话"));
+    fixture.configured=true;fixture.password_set=true;fixture.token_set=true;
+    strcpy(fixture.ssid,"Home Wi-Fi");strcpy(fixture.host,"192.168.1.10:3101");
+    refresh(NULL);snap("status-configured");
+    assert(strstr(lv_label_get_text(status_text),"Home Wi-Fi"));
+    assert(strstr(lv_label_get_text(status_text),"192.168.1.10:3101"));
+    strcpy(fixture.ssid,"12345678901234567890123456789012");refresh(NULL);snap("status-long-ssid");
+    int status_top=lv_obj_get_scroll_y(configuration);
+    online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
+    assert(lv_obj_get_scroll_y(configuration)>status_top);snap("status-guide");
+    online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);refresh(NULL);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(menu.page==ONLINE_SETTINGS && menu.selected==ONLINE_MENU_CONNECTION);
+    online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);refresh(NULL);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(menu.page==ONLINE_DISPLAY);
     online_theme_t before=fixture.theme;
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(themes==1 && fixture.theme!=before);
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(themes==2 && fixture.theme==before);
@@ -206,6 +266,9 @@ int main(void) {
     strcpy(fixture.ssid,"12345678901234567890123456789012");refresh(NULL);check();
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(fixture.background==ONLINE_BACKGROUND_NIGHT);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(fixture.background==ONLINE_BACKGROUND_OFF);
+    assert(strstr(lv_label_get_text(lv_obj_get_child(settings_choices[ONLINE_DISPLAY_BACKGROUND],0)),"关闭"));
+    snap("settings-background-off");
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(fixture.background==ONLINE_BACKGROUND_DAY);
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
     for(unsigned i=0;i<4;i++) {
@@ -221,10 +284,17 @@ int main(void) {
         const char *states[]={"idle-3-min","idle-10-min","idle-never","idle-1-min"};
         snap(states[i]);
     }
-    assert(idle_changes==4 && menu.page==ONLINE_SETTINGS);
+    assert(idle_changes==4 && menu.page==ONLINE_DISPLAY);
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(!fixture.overlay);
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
-    online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(!fixture.cues);snap("cues-off");
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(fixture.cues);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);
+    assert(lv_obj_has_flag(header,LV_OBJ_FLAG_HIDDEN) && lv_obj_has_flag(home_controls,LV_OBJ_FLAG_HIDDEN));
+    assert(lv_obj_has_flag(caption,LV_OBJ_FLAG_HIDDEN));snap("home-clean");
+    online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);
+    online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);refresh(NULL);
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);snap("confirm");assert(setups==0);
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(setups==0 && menu.page==ONLINE_SETTINGS);
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);
@@ -240,12 +310,13 @@ int main(void) {
     menu.page=ONLINE_HOME;fixture.phase=ONLINE_LISTENING;fixture.mic=true;
     refresh(NULL);clock_us+=60000000;refresh(NULL);
     assert(backlight==0 && fixture.mic);
-    unsigned previous_toggles=toggles,previous_cancels=cancels,previous_volumes=volumes;
+    unsigned previous_toggles=toggles,previous_cancels=cancels,previous_volumes=volumes,previous_ptt=ptt_presses;
     for(unsigned i=0;i<3;i++) {
         bsp_btn_t key=i==0?BSP_BTN_OK:i==1?BSP_BTN_UP:BSP_BTN_DOWN;
         online_ui_key(key,BSP_BTN_PRESS);refresh(NULL);assert(backlight==100);
+        if(key==BSP_BTN_DOWN) {online_ui_key(key,BSP_BTN_LONG);online_ui_key(key,BSP_BTN_RELEASE);}
         online_ui_key(key,BSP_BTN_CLICK);refresh(NULL);
-        assert(toggles==previous_toggles && cancels==previous_cancels && volumes==previous_volumes);
+        assert(toggles==previous_toggles && cancels==previous_cancels && volumes==previous_volumes && ptt_presses==previous_ptt);
         clock_us+=60000000;refresh(NULL);assert(backlight==0);
     }
     online_ui_key(BSP_BTN_OK,BSP_BTN_PRESS);refresh(NULL);

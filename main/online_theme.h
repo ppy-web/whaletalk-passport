@@ -6,3 +6,7 @@ online_idle_t online_idle_load(void);
 bool online_idle_save(online_idle_t setting);
 unsigned online_brightness_load(void);
 bool online_brightness_save(unsigned percent);
+bool online_overlay_load(void);
+bool online_overlay_save(bool enabled);
+bool online_cues_load(void);
+bool online_cues_save(bool enabled);

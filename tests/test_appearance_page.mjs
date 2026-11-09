@@ -5,10 +5,10 @@ import test from 'node:test';
 const html=readFileSync(new URL('../main/appearance-page.html',import.meta.url),'utf8');
 const script=html.match(/<script>([\s\S]*?)<\/script>/)[1];
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
-function page({offline=false}={}){
+function page({offline=false,background=0}={}){
   const elements=new Map(),calls=[],revoked=[];
   for(const [,id] of html.matchAll(/\bid="([^"]+)"/g))elements.set(id,{disabled:['upload','apply','file'].includes(id),style:{},files:[],textContent:''});
-  const radios=[0,1,2].map(n=>({value:String(n),checked:n===0,disabled:n===2}));
+  const radios=[0,1,2,3].map(n=>({value:String(n),checked:n===0,disabled:n===2}));
   let upload=async()=>({ok:true,text:async()=> 'uploaded'}),apply=async()=>({ok:true,text:async()=> 'saved'}),decode=async()=>{};
   const el=id=>elements.get(id);
   const context=vm.createContext({
@@ -22,7 +22,7 @@ function page({offline=false}={}){
     })},
     fetch:async(url,options={})=>{
       calls.push({url,options});if(url==='/background/upload')return upload();if(url==='/background/apply')return apply();
-      if(offline)throw Error('offline');return {ok:true,json:async()=>({nonce:'test-nonce',background:0,customBackground:false})};
+      if(offline)throw Error('offline');return {ok:true,json:async()=>({nonce:'test-nonce',background,customBackground:false})};
     }
   });
   vm.runInContext(readFileSync(new URL('../main/background-image.js',import.meta.url),'utf8'),context);
@@ -59,4 +59,11 @@ test('image decode races and file cancellation release URLs and preserve latest 
 test('oversized files, unsupported formats and failed decoding cannot upload',async()=>{
   const p=page();await tick();for(const [type,size] of [['image/png',9*1024*1024],['image/svg+xml',100]]){await p.choose(type,size);assert.equal(p.el('upload').disabled,true)}
   p.setDecode(async()=>{throw Error('decode failed')});await p.choose();assert.equal(p.el('upload').disabled,true);assert.equal(p.revoked.length,1);
+});
+
+test('off preference loads, previews and saves without discarding custom data',async()=>{
+  const p=page({background:3});await tick();
+  assert.equal(p.radios[3].checked,true);assert.equal(p.el('preview').style.visibility,'hidden');
+  assert.match(p.el('previewHint').textContent,/关闭背景/);
+  await p.el('apply').onclick();assert.deepEqual(JSON.parse(p.calls.at(-1).options.body),{background:3});
 });
