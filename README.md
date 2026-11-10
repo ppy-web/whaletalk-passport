@@ -65,6 +65,10 @@ dsh plugin --profile web add dsh-xiaomi-tts@latest
 4. 设备进入配网后，用手机加入 `DSH-Voice-*`，打开 `http://192.168.4.1`。
 5. 选择 2.4 GHz Wi-Fi，填电脑 IP 与相同配对码，保存重启，短按 OK 对话。
 
+连接器设置页可以生成配对码，并查看设备连接、麦克风和语音识别状态：
+
+![AI Passport 连接器：设备连接、麦克风、语音识别状态与配对码](docs/images/connector-preview.png)
+
 连接电脑的 Windows 移动热点时，电脑地址通常为 `192.168.137.1`，以系统实际网卡为准。
 网页端口 `3080` 与设备接口 `3101` 独立。完整步骤与范围受限的防火墙示例见
 [中文指南](docs/guide.zh_CN.md)；English readers can use the [English guide](docs/guide.md).
