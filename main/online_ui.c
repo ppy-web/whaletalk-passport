@@ -31,6 +31,7 @@ static atomic_uint pending_key;
 static atomic_bool pending_activity,screen_asleep,ptt_home;
 static online_screen_t screen_idle;
 static bool buttons_available;
+void online_ui_activity(void) {atomic_store(&pending_activity,true);}
 static lv_obj_t *shape(lv_obj_t *p,int x,int y,int w,int h,uint32_t color,int radius) {
     lv_obj_t *o=lv_obj_create(p); lv_obj_remove_style_all(o);
     lv_obj_remove_flag(o,LV_OBJ_FLAG_SCROLLABLE);
@@ -109,9 +110,12 @@ static void refresh(lv_timer_t *timer) {
     online_status_t s;online_snapshot(&s);
     bool was_asleep=atomic_load(&screen_asleep);
     bool asleep=online_screen_step(&screen_idle,now,activity,
-        !buttons_available || s.ptt_recording || s.phase==ONLINE_SETUP || s.phase==ONLINE_THINKING || s.phase==ONLINE_SPEAKING,
+        !buttons_available || s.keep_awake || s.ptt_recording || s.phase==ONLINE_SETUP || s.phase==ONLINE_THINKING || s.phase==ONLINE_SPEAKING,
         online_idle_timeout_ms(s.idle));
     if(asleep!=was_asleep) {
+        if(!online_set_standby(asleep)) {
+            asleep=false;online_screen_step(&screen_idle,now,true,false,0);
+        }
         atomic_store(&screen_asleep,asleep);
     }
     static unsigned applied_brightness=101;
@@ -119,7 +123,7 @@ static void refresh(lv_timer_t *timer) {
     if(applied_brightness!=desired_brightness) {
         bsp_display_backlight((uint8_t)desired_brightness);applied_brightness=desired_brightness;
     }
-    /* Keep the lightweight timer for wake events; stop animation/invalidation. */
+    /* The maintenance worker pauses LVGL after this callback releases its lock. */
     if(asleep)return;
     bool home=menu.page==ONLINE_HOME,setup=s.phase==ONLINE_SETUP;
     atomic_store(&ptt_home,home && !setup);
@@ -391,6 +395,7 @@ void online_ui_key(bsp_btn_t key,bsp_btn_ev_t ev) {
         if(key==BSP_BTN_UP)up_long=false;
         wake_gesture=atomic_load(&screen_asleep);
         atomic_store(&pending_activity,true);
+        online_set_standby(false);
         if(key==BSP_BTN_DOWN) {
             down_long=false;down_home=!wake_gesture && atomic_load(&ptt_home);
             if(down_home)online_ptt_press();

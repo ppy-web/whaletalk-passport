@@ -96,14 +96,32 @@ In System settings, select Sleep (息屏) and briefly press OK to cycle through
 1 minute, 3 minutes, 10 minutes and Never. Changes apply immediately and are
 saved across restarts; the default is 1 minute. A failed save is shown in
 settings; cycle again to retry. Saving is deferred while thinking or speaking.
-After the selected idle period, the backlight and face animation turn off.
+After the selected idle period, connected standby turns off the backlight,
+puts the LCD panel and ES8311 codec to sleep, stops microphone capture and I2S
+TX/RX, suspends the LVGL tick and task, and selects minimum Wi-Fi Modem-sleep.
+The network connection and conversation remain available. No microphone audio
+is captured/uploaded and connection cues stay silent while in standby.
 Never keeps the screen on.
-Networking and an enabled microphone continue working. The first button gesture
-only wakes the screen; press again for its normal action. Thinking or speaking
-automatically wakes the screen and keeps it on, restarting the idle countdown.
+The first button gesture only wakes the device; press again for its normal
+action. Wake restores the selected brightness and the previous microphone
+choice, leaving a muted microphone muted. Panel wake takes about 120 ms.
+Capture, recognition, thinking, playback, push-to-talk capture/upload and a
+pending manual reply defer standby and restart its countdown. Incoming work
+also wakes a device if it races the idle deadline.
 Provisioning and unavailable buttons keep the screen on for access and diagnosis.
-This is backlight sleep rather than device deep sleep. Networking and capture
-still use power; battery-life improvement needs measurement on hardware.
+This is connected peripheral standby, not system light sleep or deep sleep.
+Active use restores low-latency Wi-Fi. The amplifier enable is not wired to
+the MCU, so it cannot be independently powered off. Current and battery-life
+improvements still need measurement on hardware.
+
+For standby acceptance, enter idle with the mic both open and muted, wake with
+each key (including held gestures), verify the restored mic choice, two voice
+turns and cancellation, and restart DSH while asleep before checking reconnect.
+The `whale_power` logs separately report audio suspension, panel/LVGL suspension
+and Wi-Fi power-save transitions. For power measurements, disconnect USB charging
+and measure stable average battery-side current against the old firmware's
+screen-off state under the same network/signal and brightness/volume settings.
+Neither a current spike nor a battery percentage establishes a runtime gain.
 
 In settings, UP/DOWN select and OK confirms. Reconfiguration needs confirmation;
 cancelling keeps existing settings. Audio uploads only after the user enables

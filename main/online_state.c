@@ -224,6 +224,12 @@ bool online_screen_step(online_screen_t *screen,uint64_t now_ms,bool activity,bo
     } else if(now_ms-screen->activity_ms>=timeout_ms)screen->asleep=true;
     return screen->asleep;
 }
+bool online_standby_busy(online_phase_t phase,unsigned mode,bool reply_pending,
+                         bool host_busy,bool capturing,bool feedback_pending) {
+    return phase==ONLINE_SETUP || phase==ONLINE_THINKING || phase==ONLINE_SPEAKING ||
+        mode==PTT_ARMED || mode==PTT_ACTIVE || mode==PTT_DRAINING ||
+        reply_pending || host_busy || capturing || feedback_pending;
+}
 online_theme_t online_theme_next(online_theme_t theme) {
     return theme==ONLINE_THEME_WHALE?ONLINE_THEME_MINT:ONLINE_THEME_WHALE;
 }

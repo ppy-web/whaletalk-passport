@@ -31,6 +31,20 @@ def host_tests():
     run(*command, '-std=c11', '-Wall', '-Wextra', '-Werror', '-Imain',
         'tests/test_online_state.c', 'main/online_state.c', '-o', executable)
     run(executable)
+    input_test = build / ('input-test.exe' if os.name == 'nt' else 'input-test')
+    run(*command, '-std=c11', '-Wall', '-Wextra', '-Werror', '-Imain',
+        'tests/test_online_input.c', 'main/online_input.c', '-o', input_test)
+    run(input_test)
+    power_test = build / ('display-power-test.exe' if os.name == 'nt' else 'display-power-test')
+    run(*command, '-std=c11', '-Wall', '-Wextra', '-Werror', '-Itests/power_stubs',
+        '-Icomponents/bsp/include', 'tests/test_display_power.c',
+        'components/bsp/src/bsp_display_power.c', '-o', power_test)
+    run(power_test)
+    lvgl_power_test = build / ('lvgl-power-test.exe' if os.name == 'nt' else 'lvgl-power-test')
+    run(*command, '-std=c11', '-Wall', '-Wextra', '-Werror', '-Itests/power_stubs',
+        '-Icomponents/bsp/include', 'tests/test_lvgl_power.c',
+        'components/bsp/src/bsp_display_rounding.c', '-o', lvgl_power_test)
+    run(lvgl_power_test)
     cue_test = build / ('cue-test.exe' if os.name == 'nt' else 'cue-test')
     run(*command, '-std=c11', '-Wall', '-Wextra', '-Werror', '-Imain',
         'tests/test_online_cue.c', 'main/online_cue.c', '-o', cue_test)

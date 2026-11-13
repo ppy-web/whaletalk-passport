@@ -21,6 +21,26 @@ static void test_time_wait(void) {
     assert(online_time_step(&w,true,true,UINT64_C(5000010000))==ONLINE_TIME_RETRY);
 }
 static void test_screen_idle(void) {
+    online_screen_t pending={0};
+    const unsigned modes[]={PTT_ARMED,PTT_ACTIVE,PTT_DRAINING};
+    for(unsigned i=0;i<3;i++) {
+        bool busy=online_standby_busy(ONLINE_READY,modes[i],false,false,false,false);
+        assert(busy);
+        assert(!online_screen_step(&pending,1000000+i*1000000,false,busy,60000));
+    }
+    assert(!online_standby_busy(ONLINE_LISTENING,PTT_IDLE,false,false,false,false));
+    assert(!online_standby_busy(ONLINE_ERROR,PTT_FAILED,false,false,false,false));
+    assert(online_standby_busy(ONLINE_READY,PTT_IDLE,true,false,false,false));
+    assert(online_standby_busy(ONLINE_READY,PTT_IDLE,false,true,false,false));
+    assert(online_standby_busy(ONLINE_LISTENING,PTT_IDLE,false,false,true,false));
+    assert(online_standby_busy(ONLINE_READY,PTT_IDLE,false,false,false,true));
+    assert(online_standby_busy(ONLINE_THINKING,PTT_IDLE,false,false,false,false));
+    assert(online_standby_busy(ONLINE_SPEAKING,PTT_IDLE,false,false,false,false));
+    assert(online_standby_busy(ONLINE_SETUP,PTT_IDLE,false,false,false,false));
+    // Once an upload/reply/capture finishes, restart the complete idle interval.
+    assert(!online_screen_step(&pending,3000001,false,true,60000));
+    assert(!online_screen_step(&pending,3060000,false,false,60000));
+    assert(online_screen_step(&pending,3060001,false,false,60000));
     const uint64_t timeouts[]={60000,180000,600000};
     for(unsigned i=0;i<3;i++) {
         uint64_t timeout=online_idle_timeout_ms((online_idle_t)i);

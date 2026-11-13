@@ -3,3 +3,5 @@
 #include "bsp_button.h"
 void online_ui_enter(bool buttons_ok);
 void online_ui_key(bsp_btn_t key,bsp_btn_ev_t ev);
+/* Atomic activity notification; safe with the LVGL tick stopped. */
+void online_ui_activity(void);

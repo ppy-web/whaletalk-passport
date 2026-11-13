@@ -21,6 +21,17 @@ Microphone input is PCM16LE mono 16,000 Hz in base64
 `input_audio_buffer.append` messages. The Host performs segmentation and ASR.
 Mute/unmute, wake and `response.cancel` are control events.
 
+Screen idle now pauses effective microphone input without changing the user's
+mic preference. The device sends `input.mute` before any further PCM upload;
+this clears partial capture through the connector's existing interruption path.
+On wake with an open mic, `wake` precedes `input.unmute`, and both must be sent
+successfully before uploading fresh frames. A closed mic remains closed.
+Capture epochs invalidate queued pre-sleep/pre-wake frames. Reconnecting during
+standby advertises `connection.input_enabled=false` and resynchronizes mute;
+it retains the device identity and conversation. No new protocol capability or
+Host connector change is required. Active turns and pending push-to-talk work
+defer standby. Wi-Fi association and WebSocket keepalives remain active.
+
 ## Optional push-to-talk
 
 The device advertises `input.push_to_talk`; it is enabled only when echoed by

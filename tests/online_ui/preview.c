@@ -10,6 +10,14 @@ static int battery_value=87;
 static unsigned toggles,cancels,volumes,setups,themes;
 static unsigned ptt_presses,ptt_starts,ptt_releases;
 static unsigned idle_changes,brightness_changes;
+static bool standby;
+static unsigned standby_entries,wake_requests;
+bool online_set_standby(bool asleep) {
+    if(asleep && fixture.keep_awake)return false;
+    if(asleep && !standby)standby_entries++;
+    if(!asleep) {wake_requests++;if(standby)online_ui_activity();}
+    standby=asleep;return true;
+}
 static uint8_t custom_data[ONLINE_BG_BYTES];
 const uint8_t *online_background_data(void){return fixture.custom_background?custom_data:NULL;}
 void online_cycle_background(void){fixture.background=online_background_next(fixture.background,fixture.custom_background);}
@@ -318,14 +326,18 @@ int main(void) {
     clock_us+=5000000;fixture.level=19000;refresh(NULL);check();
     assert(lv_obj_get_height(mouth)>y);
     assert(lv_obj_has_flag(ears[0],LV_OBJ_FLAG_HIDDEN));
-    /* Quiet listening may sleep without changing microphone state. */
+    /* Standby preserves the desired mic, while runtime pauses actual input. */
     menu.page=ONLINE_HOME;fixture.phase=ONLINE_LISTENING;fixture.mic=true;
     refresh(NULL);clock_us+=60000000;refresh(NULL);
-    assert(backlight==0 && fixture.mic);
+    assert(backlight==0 && fixture.mic && standby && standby_entries);
     unsigned previous_toggles=toggles,previous_cancels=cancels,previous_volumes=volumes,previous_ptt=ptt_presses;
     for(unsigned i=0;i<3;i++) {
         bsp_btn_t key=i==0?BSP_BTN_OK:i==1?BSP_BTN_UP:BSP_BTN_DOWN;
-        online_ui_key(key,BSP_BTN_PRESS);refresh(NULL);assert(backlight==100);
+        unsigned before_wake=wake_requests;
+        // The key requests wake before any UI refresh: a stopped LVGL tick
+        // must not strand the device asleep.
+        online_ui_key(key,BSP_BTN_PRESS);assert(!standby && wake_requests>before_wake);
+        refresh(NULL);assert(backlight==100);
         if(key==BSP_BTN_DOWN) {online_ui_key(key,BSP_BTN_LONG);online_ui_key(key,BSP_BTN_RELEASE);}
         online_ui_key(key,BSP_BTN_CLICK);refresh(NULL);
         assert(toggles==previous_toggles && cancels==previous_cancels && volumes==previous_volumes && ptt_presses==previous_ptt);
@@ -347,6 +359,9 @@ int main(void) {
     clock_us+=120000000;refresh(NULL);assert(backlight==100);
     fixture.phase=ONLINE_SPEAKING;clock_us+=120000000;refresh(NULL);assert(backlight==100);
     fixture.phase=ONLINE_READY;refresh(NULL);clock_us+=60000000;refresh(NULL);assert(backlight==0);
+    fixture.keep_awake=true;online_ui_activity();refresh(NULL);
+    clock_us+=120000000;refresh(NULL);assert(backlight==100 && !standby);
+    fixture.keep_awake=false;refresh(NULL);clock_us+=60000000;refresh(NULL);assert(backlight==0 && standby);
     fixture.phase=ONLINE_SETUP;refresh(NULL);assert(backlight==100);
     clock_us+=120000000;refresh(NULL);assert(backlight==100);
     fixture.phase=ONLINE_READY;refresh(NULL);clock_us+=60000000;refresh(NULL);assert(backlight==0);

@@ -18,7 +18,7 @@ unsigned online_volume_next(unsigned current);
 unsigned online_brightness_normalize(unsigned stored);
 unsigned online_brightness_next(unsigned current);
 
-/* Backlight idle timeout; voice transport and microphone remain independent. */
+/* Idle timeout for connected standby; microphone choice survives wake. */
 typedef enum { ONLINE_IDLE_1_MIN, ONLINE_IDLE_3_MIN, ONLINE_IDLE_10_MIN, ONLINE_IDLE_NEVER } online_idle_t;
 online_idle_t online_idle_normalize(unsigned stored);
 online_idle_t online_idle_next(online_idle_t current);
@@ -31,6 +31,8 @@ bool online_config_valid(const online_config_t *c);
 bool online_reuse_wifi(online_config_t *next,const online_config_t *previous);
 bool online_fragment(size_t *used, size_t capacity, size_t offset, size_t length, size_t total);
 enum { PTT_IDLE, PTT_ARMED, PTT_ACTIVE, PTT_DRAINING, PTT_FAILED };
+bool online_standby_busy(online_phase_t phase,unsigned ptt_mode,bool reply_pending,
+                         bool host_busy,bool capturing,bool feedback_pending);
 typedef struct {
     atomic_uint mode,sequence,ack,problem;
     atomic_bool supported,reply,capture_stopped,audio_started;

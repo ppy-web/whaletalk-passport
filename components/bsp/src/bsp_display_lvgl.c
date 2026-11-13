@@ -5,6 +5,8 @@
 #include "bsp_pins.h"
 #include "esp_lvgl_port.h"
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include <string.h>
 
 static const char *TAG = "bsp_lvgl";
@@ -14,6 +16,15 @@ static const char *TAG = "bsp_lvgl";
 static lv_display_t *s_disp;
 static bool s_port_initialized;
 static bool s_port_init_failed;
+static bool s_paused;
+static TaskHandle_t s_lvgl_task;
+
+static void remember_lvgl_task(lv_timer_t *timer) {
+    // A public LVGL callback gives us its owner without relying on the port's
+    // private context or a task name. Other tasks only use this under its lock.
+    s_lvgl_task=xTaskGetCurrentTaskHandle();
+    lv_timer_delete(timer);
+}
 
 static void rounded_flush_event(lv_event_t *event)
 {
@@ -116,6 +127,12 @@ lv_display_t *bsp_lvgl_init(void) {
     // Mask the final RGB565 flush instead of using root-screen clip_corner.
     // Full-screen rounded clipping creates an ARGB layer that does not fit the
     // 24 KB LVGL pool reliably on this no-PSRAM target.
+    if(!lv_timer_create(remember_lvgl_task,1,NULL)) {
+        ESP_LOGE(TAG,"LVGL task callback 分配失败");
+        lvgl_port_remove_disp(disp);
+        lvgl_port_unlock();
+        return NULL;
+    }
     s_disp = disp;
     lvgl_port_unlock();
 
@@ -126,6 +143,27 @@ lv_display_t *bsp_lvgl_init(void) {
 bool bsp_lvgl_lock(int timeout_ms) {
     if (!s_disp) return false;
     return lvgl_port_lock(timeout_ms);
+}
+esp_err_t bsp_lvgl_pause(void) {
+    if(!s_disp)return ESP_ERR_INVALID_STATE;
+    if(s_paused)return ESP_OK;
+    if(!s_lvgl_task || s_lvgl_task==xTaskGetCurrentTaskHandle())return ESP_ERR_INVALID_STATE;
+    esp_err_t e=lvgl_port_stop();
+    if(e==ESP_OK) {
+        // Caller holds the recursive LVGL mutex: its task cannot own it here.
+        // Port 2.9 + LVGL 9.5 polls at ~2 ms with timers disabled, so stopping
+        // only its tick would actually increase idle wakeups.
+        vTaskSuspend(s_lvgl_task);s_paused=true;
+    }
+    else (void)lvgl_port_resume(); // stop disables LV timers even on error.
+    return e;
+}
+esp_err_t bsp_lvgl_resume(void) {
+    if(!s_disp)return ESP_ERR_INVALID_STATE;
+    if(!s_paused)return ESP_OK;
+    esp_err_t e=lvgl_port_resume();
+    if(e==ESP_OK) {s_paused=false;vTaskResume(s_lvgl_task);}
+    return e;
 }
 void bsp_lvgl_unlock(void) {
     if (s_disp) lvgl_port_unlock();

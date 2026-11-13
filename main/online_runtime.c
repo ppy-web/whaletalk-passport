@@ -3,7 +3,10 @@
 #include "online_theme.h"
 #include "online_background.h"
 #include "online_cue.h"
+#include "online_input.h"
+#include "online_ui.h"
 #include "bsp_audio.h"
+#include "bsp_display.h"
 #include "esp_websocket_client.h"
 #include "esp_crt_bundle.h"
 #include "esp_wifi.h"
@@ -63,6 +66,8 @@ static atomic_uint overlay_revision;
 static atomic_bool cues_enabled=true,cues_save_failed,ptt_wait_cue,ptt_long_gesture;
 static atomic_uint cues_revision;
 static atomic_bool suppress_audio;
+static atomic_bool standby_requested;
+static _Atomic(TaskHandle_t) audio_worker,maintenance_worker,network_worker;
 static esp_websocket_client_handle_t gateway_socket;
 static char *frame;
 static size_t frame_used,frame_base,chunk_used,chunk_total;
@@ -77,12 +82,40 @@ static char response_id[129];
 static int connection_http,connection_errno;
 static const char *backend_problem;
 static online_feedback_t feedback;
+static bool runtime_active(void) {
+    portENTER_CRITICAL(&state_lock);
+    online_phase_t phase=status.phase;
+    bool pending=feedback.phase && !feedback.settled;
+    portEXIT_CRITICAL(&state_lock);
+    unsigned mode=atomic_load(&ptt_mode);
+    return online_standby_busy(phase,mode,atomic_load(&ptt_reply),atomic_load(&host_busy),
+                               atomic_load(&host_capturing),pending);
+}
+static bool microphone_enabled(void) {
+    return atomic_load(&mic) && !atomic_load(&standby_requested);
+}
+bool online_set_standby(bool asleep) {
+    if(asleep && (!atomic_load(&theme_storage_available) || runtime_active()))return false;
+    bool changed=atomic_exchange(&standby_requested,asleep)!=asleep;
+    if(!asleep && changed)online_ui_activity();
+    if(changed) {
+        // Invalidate both pre-sleep and pre-wake captured frames. The audio task
+        // owns codec transitions, so no I2S call can race a PCM read/write.
+        atomic_fetch_add(&epoch,1);
+        TaskHandle_t task=atomic_load(&audio_worker);if(task)xTaskNotifyGive(task);
+        task=atomic_load(&maintenance_worker);if(task)xTaskNotifyGive(task);
+        task=atomic_load(&network_worker);if(task)xTaskNotifyGive(task);
+    }
+    // A turn may have started between the guard and the atomic exchange.
+    if(asleep && runtime_active()) {online_set_standby(false);return false;}
+    return true;
+}
 static portMUX_TYPE cue_lock=portMUX_INITIALIZER_UNLOCKED;
 static online_cue_queue_t cue_queue;
 static uint64_t cue_connection_at[2];
 static void cue_clear(void) {portENTER_CRITICAL(&cue_lock);online_cue_clear(&cue_queue);portEXIT_CRITICAL(&cue_lock);}
 static void cue_request(online_cue_t kind) {
-    if(!audio_available || !atomic_load(&cues_enabled) || !atomic_load(&volume))return;
+    if(atomic_load(&standby_requested) || !audio_available || !atomic_load(&cues_enabled) || !atomic_load(&volume))return;
     uint64_t now=(uint64_t)(esp_timer_get_time()/1000);
     portENTER_CRITICAL(&cue_lock);
     if(kind==CUE_CONNECTED || kind==CUE_DISCONNECTED) {
@@ -102,6 +135,7 @@ static void state(online_phase_t p,const char *message) {
     if(p==ONLINE_ERROR || p==ONLINE_CONNECTING)memset(&feedback,0,sizeof(feedback));
     if(message) snprintf(status.message,sizeof(status.message),"%s",message);
     portEXIT_CRITICAL(&state_lock);
+    if(p==ONLINE_SETUP || p==ONLINE_THINKING || p==ONLINE_SPEAKING)online_set_standby(false);
 }
 void online_snapshot(online_status_t *out) {
     portENTER_CRITICAL(&state_lock);*out=status;
@@ -112,6 +146,7 @@ void online_snapshot(online_status_t *out) {
     portEXIT_CRITICAL(&state_lock);
     unsigned mode=atomic_load(&ptt_mode),problem=atomic_load(&ptt_problem);
     out->ptt_recording=mode==PTT_ACTIVE;
+    out->keep_awake=runtime_active() || !atomic_load(&theme_storage_available);
     if(mode==PTT_ACTIVE || mode==PTT_DRAINING || problem) {
         const char *message=mode==PTT_DRAINING?"正在发送语音":mode==PTT_ACTIVE?
             (atomic_load(&ptt_audio_started)?"正在录音，松开发送":"准备录音，请继续按住"):
@@ -199,9 +234,36 @@ void online_toggle_cues(void) {
     atomic_store(&cues_save_failed,!atomic_load(&theme_storage_available));atomic_fetch_add(&cues_revision,1);
     if(value)cue_clear();else cue_request(CUE_VOLUME);
 }
+static void display_standby_step(bool *suspended) {
+    if(atomic_load(&standby_requested)==*suspended)return;
+    if(!bsp_lvgl_lock(1000)) {
+        if(!*suspended)online_set_standby(false);
+        return;
+    }
+    bool asleep=atomic_load(&standby_requested);
+    esp_err_t e=ESP_OK;
+    if(asleep && !*suspended) {
+        e=bsp_lvgl_pause();
+        if(e==ESP_OK) {
+            *suspended=true;
+            e=bsp_display_sleep();
+        }
+        if(e!=ESP_OK)online_set_standby(false);
+    } else if(!asleep && *suspended) {
+        e=bsp_display_wake();
+        if(e==ESP_OK)e=bsp_lvgl_resume();
+        if(e==ESP_OK)*suspended=false;
+    }
+    bsp_lvgl_unlock();
+    if(e!=ESP_OK)ESP_LOGW("whale_power","display transition failed: %s",esp_err_to_name(e));
+    else if(asleep==*suspended)ESP_LOGI("whale_power","panel and LVGL %s",asleep?"suspended":"resumed");
+}
 static void theme_task(void *arg) {
     (void)arg;unsigned saved_revision=0,saved_idle_revision=0,saved_background_revision=0,saved_brightness_revision=0,saved_overlay_revision=0,saved_cues_revision=0;
+    atomic_store(&maintenance_worker,xTaskGetCurrentTaskHandle());
+    bool display_suspended=false;
     for(;;) {
+        display_standby_step(&display_suspended);
         unsigned revision=atomic_load(&theme_revision),idle_changed=atomic_load(&idle_revision),
             background_changed=atomic_load(&background_revision),brightness_changed=atomic_load(&brightness_revision);
         online_status_t snapshot;online_snapshot(&snapshot);
@@ -242,7 +304,7 @@ static void theme_task(void *arg) {
             atomic_store(&cues_save_failed,!ok);saved_cues_revision=cues_changed;
             if(!ok)ESP_LOGW("whale_theme","cue preference persistence failed");
         }
-        vTaskDelay(pdMS_TO_TICKS(150));
+        ulTaskNotifyTake(pdTRUE,pdMS_TO_TICKS(atomic_load(&standby_requested)?1000:150));
     }
 }
 static void fail(const char *why) {
@@ -376,6 +438,7 @@ static void receive_message(void) {
         bool accepted=online_feedback_progress(&feedback,string(j,"turnId"),string(j,"phase"),(uint64_t)(esp_timer_get_time()/1000));
         portEXIT_CRITICAL(&state_lock);
         if(accepted)atomic_store(&host_capturing,!strcmp(string(j,"phase"),"capturing"));
+        if(accepted)online_set_standby(false);
         if(accepted && !strcmp(string(j,"phase"),"capturing") && atomic_load(&ptt_mode)==PTT_IDLE)atomic_store(&ptt_problem,0);
     } else if(!strcmp(type,"voice.result") && atomic_load(&ready)) {
         portENTER_CRITICAL(&state_lock);
@@ -459,6 +522,9 @@ static void websocket_event(void *arg,esp_event_base_t base,int32_t id,void *dat
             frame[frame_used]=0;receive_message();frame_used=0;message_active=false;
         }
     }
+    if(id!=WEBSOCKET_EVENT_DATA) {
+        TaskHandle_t task=atomic_load(&network_worker);if(task)xTaskNotifyGive(task);
+    }
 }
 static void wifi_event(void *arg,esp_event_base_t base,int32_t id,void *data) {
     (void)arg;
@@ -481,6 +547,7 @@ static bool send_json(cJSON *j) {
     return sent==length;
 }
 static cJSON *event(const char *type) {cJSON *j=cJSON_CreateObject();if(j)cJSON_AddStringToObject(j,"type",type);return j;}
+static bool send_input_control(const char *type,void *context) {(void)context;return send_json(event(type));}
 static void send_hello(void) {
     cJSON *j=event("session.hello"),*protocol=cJSON_AddObjectToObject(j,"protocol");
     cJSON_AddStringToObject(protocol,"min","7.0.0");cJSON_AddStringToObject(protocol,"max","7.0.0");
@@ -494,7 +561,7 @@ static void send_hello(void) {
     cJSON_AddItemToArray(caps,cJSON_CreateString("input.push_to_talk"));
     cJSON_AddStringToObject(j,"locale","zh-CN");cJSON_AddStringToObject(j,"time_zone","Asia/Shanghai");
     cJSON *connection=cJSON_AddObjectToObject(j,"connection");
-    cJSON_AddBoolToObject(connection,"voice_enabled",true);cJSON_AddBoolToObject(connection,"input_enabled",atomic_load(&mic));
+    cJSON_AddBoolToObject(connection,"voice_enabled",true);cJSON_AddBoolToObject(connection,"input_enabled",microphone_enabled());
     cJSON_AddBoolToObject(connection,"output_enabled",true);cJSON_AddBoolToObject(connection,"text_only",false);
     if(!send_json(j))fail("握手失败，请检查后端");
 }
@@ -512,6 +579,7 @@ static bool play_cue(online_cue_t kind,unsigned *format,int *applied,bool holdin
     /* Six DMA descriptors can retain ~90 ms. Queue 100 ms of silence after
      * the 80 ms tone so its last sample has left TX before capture resumes. */
     for(unsigned block=0;block<18;block++) {
+        if(atomic_load(&standby_requested))return false;
         if(block<8)online_cue_render(kind,block,samples);else memset(samples,0,sizeof(samples));
         unsigned mode=atomic_load(&ptt_mode);
         bool active=holding?mode==PTT_ACTIVE:mode!=PTT_IDLE;
@@ -524,6 +592,7 @@ static bool play_cue(online_cue_t kind,unsigned *format,int *applied,bool holdin
 }
 static void audio_task(void *arg) {
     (void)arg;
+    atomic_store(&audio_worker,xTaskGetCurrentTaskHandle());
     /* One lifetime worker owns these buffers. Keep codec call-stack headroom. */
     static playback_t p;
     static capture_t c={.len=PCM_BYTES};
@@ -533,7 +602,30 @@ static void audio_task(void *arg) {
     int64_t last_metrics=0,starved_since=0,prefill_since=0;
     unsigned playback_starves=0,max_starve_ms=0,max_write_ms=0;
     unsigned active_epoch=0,format=0;int64_t quiet_until=0;online_cue_gate_t ptt_gate={0};
+    bool sleeping=false;
     for(;;) {
+        if(atomic_load(&standby_requested)) {
+            if(runtime_active() || active[0]) {online_set_standby(false);continue;}
+            if(!sleeping) {
+                cue_clear();xQueueReset(capture);
+                esp_err_t e=bsp_audio_sleep();
+                sleeping=true;format=0;applied_volume=-1;atomic_store(&level,0);
+                if(e!=ESP_OK) {
+                    ESP_LOGW("whale_power","audio suspend failed: %s",esp_err_to_name(e));
+                    online_set_standby(false);continue;
+                }
+                ESP_LOGI("whale_power","audio suspended; I2S TX/RX stopped");
+            }
+            // Wake is notified independently of LVGL and its stopped tick.
+            ulTaskNotifyTake(pdTRUE,portMAX_DELAY);continue;
+        }
+        if(sleeping) {
+            esp_err_t e=bsp_audio_wake();
+            if(e!=ESP_OK) {fail("麦克风不可用");vTaskDelay(pdMS_TO_TICKS(250));continue;}
+            sleeping=false;
+            xQueueReset(capture);quiet_until=esp_timer_get_time()+60000;
+            ESP_LOGI("whale_power","audio resumed");
+        }
         if(atomic_load(&ptt_mode)==PTT_DRAINING)atomic_store(&ptt_capture_stopped,true);
         if(esp_timer_get_time()-last_metrics>10000000) {
             last_metrics=esp_timer_get_time();
@@ -644,11 +736,11 @@ static void audio_task(void *arg) {
             continue;
         }
         if(mode!=PTT_IDLE){vTaskDelay(pdMS_TO_TICKS(5));continue;}
-        if(!audio_available || !atomic_load(&ready) || !atomic_load(&mic) || atomic_load(&host_busy)){vTaskDelay(pdMS_TO_TICKS(20));continue;}
+        if(!audio_available || !atomic_load(&ready) || !microphone_enabled() || atomic_load(&host_busy)){vTaskDelay(pdMS_TO_TICKS(20));continue;}
         if(format!=16000){if(bsp_audio_set_format(16000,16,1)!=ESP_OK){fail("麦克风不可用");continue;}format=16000;}
         unsigned read_epoch=atomic_load(&epoch);
         if(bsp_audio_read(c.pcm,PCM_BYTES)!=ESP_OK){fail("麦克风读取失败");continue;}
-        if(atomic_load(&ptt_mode)==PTT_IDLE && read_epoch==atomic_load(&epoch) && atomic_load(&mic) && !atomic_load(&host_busy) && esp_timer_get_time()>quiet_until) {
+        if(atomic_load(&ptt_mode)==PTT_IDLE && read_epoch==atomic_load(&epoch) && microphone_enabled() && !atomic_load(&host_busy) && esp_timer_get_time()>quiet_until) {
             c.epoch=read_epoch;
             if(xQueueSend(capture,&c,0)!=pdTRUE) {
                 /* Prefer current speech to stale queued audio after a network stall.
@@ -722,8 +814,13 @@ static void network_task(void *arg) {
     if(!gateway_socket || esp_websocket_register_events(gateway_socket,WEBSOCKET_EVENT_ANY,websocket_event,NULL)!=ESP_OK) {
         state(ONLINE_ERROR,"后端连接初始化失败");vTaskDelete(NULL);return;
     }
+    // Publish only after every early-delete path: notifications must never
+    // target a handle belonging to a failed initialization task.
+    atomic_store(&network_worker,xTaskGetCurrentTaskHandle());
     online_time_wait_t time_wait={0};
-    bool started=false,previous_mic=false;int64_t last_connect=0,ptt_started_at=0;unsigned ptt_sent=0;capture_t c;receipt_t r;
+    bool started=false;online_input_control_t input={0};
+    wifi_ps_type_t applied_ps=WIFI_PS_NONE;
+    int64_t last_connect=0,ptt_started_at=0;unsigned ptt_sent=0;capture_t c;receipt_t r;
     static playback_t ptt_frame;
     for(;;) {
         if(atomic_exchange(&setup_pending,false)) {
@@ -732,6 +829,12 @@ static void network_task(void *arg) {
             if(e==ESP_OK)esp_restart();else state(ONLINE_ERROR,"无法进入配置，请重试");
         }
         if(atomic_exchange(&volume_pending,false)){atomic_store(&volume,online_volume_next(atomic_load(&volume)));cue_request(CUE_VOLUME);}
+        wifi_ps_type_t desired_ps=atomic_load(&standby_requested)?WIFI_PS_MIN_MODEM:WIFI_PS_NONE;
+        if(applied_ps!=desired_ps) {
+            esp_err_t e=esp_wifi_set_ps(desired_ps);
+            if(e==ESP_OK) {applied_ps=desired_ps;ESP_LOGI("whale_power","Wi-Fi power save %s",desired_ps==WIFI_PS_NONE?"off":"minimum modem");}
+            else {ESP_LOGW("whale_power","Wi-Fi power save failed: %s",esp_err_to_name(e));online_set_standby(false);}
+        }
         bool has_ip=atomic_load(&got_ip);
         if(!started) {
             bool was_waiting=time_wait.active;
@@ -756,7 +859,7 @@ static void network_task(void *arg) {
             vTaskDelay(pdMS_TO_TICKS(100));continue;
         }
         if(!started){state(ONLINE_CONNECTING,"正在连接后端");esp_websocket_client_start(gateway_socket);started=true;}
-        if(!atomic_load(&fault) && atomic_load(&connected) && atomic_exchange(&hello_pending,false)) {send_hello();previous_mic=!atomic_load(&mic);}
+        if(!atomic_load(&fault) && atomic_load(&connected) && atomic_exchange(&hello_pending,false)) {send_hello();input.synced=false;}
         if(atomic_exchange(&fault,false)) {
             esp_websocket_client_stop(gateway_socket);atomic_store(&connected,false);vTaskDelay(pdMS_TO_TICKS(1000));
             esp_websocket_client_start(gateway_socket);continue;
@@ -766,15 +869,14 @@ static void network_task(void *arg) {
             if(atomic_load(&connected))send_json(event("response.cancel"));
             if(atomic_load(&ready))state(atomic_load(&mic)?ONLINE_LISTENING:ONLINE_READY,atomic_load(&mic)?"你说，我在听":"麦克风已关闭");
         }
-        if(atomic_load(&connected) && previous_mic!=atomic_load(&mic)) {
-            previous_mic=atomic_load(&mic);
+        bool enabled=microphone_enabled();
+        if(atomic_load(&connected) && (!input.synced || input.enabled!=enabled)) {
             /* Clear upstream buffered input on pause; wake the retained session
              * before resuming. These controls must precede fresh audio frames. */
-            if(previous_mic && !send_json(event("wake"))) {recover_transport();continue;}
-            if(!send_json(event(previous_mic?"input.unmute":"input.mute"))) {recover_transport();continue;}
-            ESP_LOGI("bean_network","microphone %s",previous_mic?"resumed":"paused");
-            if(atomic_load(&ready))state(previous_mic?ONLINE_LISTENING:ONLINE_READY,previous_mic?"你说，我在听":"麦克风已关闭");
-            else if(previous_mic && atomic_load(&connected))state(ONLINE_CONNECTING,"语音服务恢复中");
+            if(!online_input_sync(&input,enabled,send_input_control,NULL)) {recover_transport();continue;}
+            ESP_LOGI("bean_network","microphone %s",enabled?"resumed":"paused");
+            if(atomic_load(&ready))state(enabled?ONLINE_LISTENING:ONLINE_READY,enabled?"你说，我在听":"麦克风已关闭");
+            else if(enabled && atomic_load(&connected))state(ONLINE_CONNECTING,"语音服务恢复中");
         }
         while(xQueueReceive(receipts,&r,0)==pdTRUE)if(atomic_load(&connected)) {
             cJSON *j=event(r.type);cJSON_AddStringToObject(j,"responseId",r.id);if(!send_json(j)){recover_transport();break;}
@@ -818,7 +920,10 @@ static void network_task(void *arg) {
         } else if(ptt_sent) {
             send_json(event("response.cancel"));ptt_sent=0;
         }
-        if(xQueueReceive(capture,&c,pdMS_TO_TICKS(10))==pdTRUE && atomic_load(&connected) && atomic_load(&ready) && atomic_load(&mic) && !atomic_load(&host_busy) && c.epoch==atomic_load(&epoch)) {
+        if(atomic_load(&standby_requested)) {
+            xQueueReset(capture);ulTaskNotifyTake(pdTRUE,pdMS_TO_TICKS(1000));continue;
+        }
+        if(xQueueReceive(capture,&c,pdMS_TO_TICKS(10))==pdTRUE && atomic_load(&connected) && atomic_load(&ready) && input.synced && input.enabled && microphone_enabled() && !atomic_load(&host_busy) && c.epoch==atomic_load(&epoch)) {
             unsigned char encoded[PCM_BYTES*4/3+8];size_t len=0;
             if(!mbedtls_base64_encode(encoded,sizeof(encoded),&len,c.pcm,c.len)) {
                 encoded[len]=0;cJSON *j=event("input_audio_buffer.append");cJSON_AddStringToObject(j,"audio",(char *)encoded);
