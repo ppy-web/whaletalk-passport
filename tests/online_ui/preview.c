@@ -4,6 +4,7 @@
 #include <string.h>
 #include "src/misc/lv_text_private.h"
 #include "src/draw/lv_image_decoder_private.h"
+#include "src/widgets/label/lv_label_private.h"
 #include "online_ui.c"
 static online_status_t fixture;
 static int battery_value=87;
@@ -48,7 +49,8 @@ static void check_labels(lv_obj_t *o){
         if(!lv_obj_has_flag(lv_obj_get_parent(o),LV_OBJ_FLAG_SCROLLABLE))assert(a.y2<320);
         lv_point_t dim;const lv_font_t *f=lv_obj_get_style_text_font(o,0);
         lv_text_get_size(&dim,s,f,0,lv_obj_get_style_text_line_space(o,0),lv_obj_get_width(o),LV_TEXT_FLAG_NONE);
-        if(lv_label_get_long_mode(o)==LV_LABEL_LONG_DOT || lv_label_get_long_mode(o)==LV_LABEL_LONG_SCROLL_CIRCULAR)dim.y=lv_obj_get_height(o);
+        if(lv_label_get_long_mode(o)==LV_LABEL_LONG_DOT || lv_label_get_long_mode(o)==LV_LABEL_LONG_SCROLL ||
+           lv_label_get_long_mode(o)==LV_LABEL_LONG_SCROLL_CIRCULAR)dim.y=lv_obj_get_height(o);
         if(dim.y>lv_obj_get_height(o))fprintf(stderr,"Clipped: %s %d > %d\n",s,(int)dim.y,(int)lv_obj_get_height(o));
         assert(dim.y<=lv_obj_get_height(o));
         for(uint32_t i=0;s[i];){uint32_t cp=lv_text_encoded_next(s,&i);if(cp=='\n')continue;
@@ -81,6 +83,28 @@ static void check_labels(lv_obj_t *o){
     for(unsigned i=0;i<lv_obj_get_child_count(o);i++)check_labels(lv_obj_get_child(o,i));
 }
 static void check(void){lv_obj_update_layout(lv_screen_active());check_labels(lv_screen_active());}
+static uint32_t object_render_hash(lv_obj_t *object){
+    /* Exercise the actual drawing callback, not just the stored state value. */
+    lv_draw_buf_t *b=lv_snapshot_take(object,LV_COLOR_FORMAT_ARGB8888);assert(b);
+    uint32_t hash=2166136261u;
+    for(uint32_t i=0;i<b->data_size;i++)hash=(hash^b->data[i])*16777619u;
+    lv_draw_buf_destroy(b);return hash;
+}
+static uint32_t icon_render_hash(ui_icon_t *icon){return object_render_hash(icon->obj);}
+static void check_icon_flash_sources(void){
+    const lv_image_dsc_t *images[]={&ui_link_off_image,&ui_link_on_image,
+        &ui_mic_off_image,&ui_mic_on_image,&ui_battery_image,&ui_up_image,&ui_down_image,
+        &ui_ok_image,&ui_stop_image,&ui_thinking_0_image,&ui_thinking_1_image,
+        &ui_thinking_2_image,&ui_listen_image,&ui_volume_off_image,&ui_volume_low_image,
+        &ui_volume_high_image,&ui_volume_level_image};
+    for(unsigned i=0;i<sizeof(images)/sizeof(images[0]);i++) {
+        lv_image_decoder_dsc_t decoder;
+        assert(lv_image_decoder_open(&decoder,images[i],NULL)==LV_RESULT_OK);
+        /* Aligned A8 masks are used in place, without a decoded pixel buffer. */
+        assert(decoder.decoded && decoder.decoded->data==images[i]->data);
+        lv_image_decoder_close(&decoder);
+    }
+}
 static void snap(const char *name){
     check();lv_draw_buf_t *b=lv_snapshot_take(lv_screen_active(),LV_COLOR_FORMAT_RGB888);assert(b);
     char path[100];snprintf(path,sizeof(path),"%s.ppm",name);FILE *f=fopen(path,"wb");assert(f);
@@ -92,6 +116,7 @@ static void snap(const char *name){
 }
 int main(void) {
     lv_init();assert(lv_display_create(240,320));fixture.volume=75;fixture.audio_ok=true;fixture.overlay=true;fixture.cues=true;
+    check_icon_flash_sources();
     online_ui_enter(true);
     for(unsigned frame=0;frame<ONLINE_AVATAR_COUNT;frame++) {
         lv_image_decoder_dsc_t decoder;
@@ -134,21 +159,54 @@ int main(void) {
             char name[48];snprintf(name,sizeof(name),"%s-%s",theme==ONLINE_THEME_WHALE?"whale":"mint",names[i]);snap(name);
             assert(lv_obj_has_flag(whale_layer,LV_OBJ_FLAG_HIDDEN)==(i==ONLINE_SETUP || theme!=ONLINE_THEME_WHALE));
             assert(lv_obj_has_flag(face_layer,LV_OBJ_FLAG_HIDDEN)==(i==ONLINE_SETUP || theme!=ONLINE_THEME_MINT));
-            assert(lv_obj_has_flag(caption,LV_OBJ_FLAG_HIDDEN)==(i!=ONLINE_ERROR && i!=ONLINE_CONNECTING));
+            assert(!lv_obj_has_flag(title,LV_OBJ_FLAG_HIDDEN));
+            if(i==ONLINE_ERROR || i==ONLINE_CONNECTING)assert(!strcmp(lv_label_get_text(title),messages[i]));
             assert(lv_obj_has_flag(home_controls,LV_OBJ_FLAG_HIDDEN)==(i==ONLINE_SETUP));
         }
     }
-    fixture.theme=ONLINE_THEME_WHALE;fixture.phase=ONLINE_LISTENING;fixture.mic=true;fixture.feedback_visible=true;
+    fixture.theme=ONLINE_THEME_WHALE;fixture.phase=ONLINE_CONNECTING;
+    const char *connections[]={"正在连接 Wi-Fi","Wi-Fi 断开，正在重试", "正在连接后端","后端断开，正在重连"};
+    for(unsigned i=0;i<sizeof(connections)/sizeof(connections[0]);i++) {
+        snprintf(fixture.message,sizeof(fixture.message),"%s",connections[i]);refresh(NULL);
+        assert(!strcmp(lv_label_get_text(title),connections[i]));
+    }
+    fixture.phase=ONLINE_READY;fixture.linked=true;fixture.mic=false;refresh(NULL);
+    assert(strstr(lv_label_get_text(title),"Wi-Fi") && strstr(lv_label_get_text(title),"后端"));
+    fixture.mic=true;refresh(NULL);assert(strstr(lv_label_get_text(title),"麦克风"));
+    fixture.linked=false;refresh(NULL);assert(strstr(lv_label_get_text(title),"后端"));
+    fixture.theme=ONLINE_THEME_WHALE;fixture.phase=ONLINE_LISTENING;fixture.mic=true;fixture.linked=true;fixture.feedback_visible=true;
     snprintf(fixture.message,sizeof(fixture.message),"%s",online_error_text("passport-no-speech"));refresh(NULL);snap("recognition-error");
-    assert(!lv_obj_has_flag(caption,LV_OBJ_FLAG_HIDDEN));
+    assert(!strcmp(lv_label_get_text(title),fixture.message));
     fixture.phase=ONLINE_THINKING;
     snprintf(fixture.message,sizeof(fixture.message),"耗时较长，按下键可取消");refresh(NULL);snap("recognition-slow");
     fixture.feedback_visible=false;
+    fixture.phase=ONLINE_LISTENING;
+    const char *progress[]={"capturing","recognizing","thinking","tool","synthesizing","playing"};
+    online_feedback_t progress_state={0};
+    for(unsigned i=0;i<sizeof(progress)/sizeof(progress[0]);i++) {
+        assert(online_feedback_progress(&progress_state,"turn",progress[i],i*100));
+        fixture.progress=progress_state.phase;refresh(NULL);
+        assert(!strcmp(lv_label_get_text(title),progress_state.phase));
+        if(i==0)snap("capture-progress");
+    }
+    fixture.feedback_visible=true;refresh(NULL);
+    assert(!strcmp(lv_label_get_text(title),fixture.message));
+    fixture.feedback_visible=false;
+    assert(online_feedback_result(&progress_state,"turn","completed",""));
+    fixture.progress=progress_state.phase;refresh(NULL);
+    assert(!fixture.progress && strstr(lv_label_get_text(title),"麦克风"));
+    fixture.phase=ONLINE_THINKING;
+    uint32_t thinking_hashes[3]={0};
     for(unsigned i=0;i<32;i++) {
         clock_us=(int64_t)i*100000;refresh(NULL);
         char name[48];snprintf(name,sizeof(name),"thinking-animation-%02u",i);snap(name);
         assert(fixture.phase==ONLINE_THINKING && backlight==100);
+        assert(phase_icon.value>=0 && phase_icon.value<3);
+        thinking_hashes[phase_icon.value]=icon_render_hash(&phase_icon);
     }
+    assert(thinking_hashes[0] && thinking_hashes[1] && thinking_hashes[2]);
+    assert(thinking_hashes[0]!=thinking_hashes[1] && thinking_hashes[0]!=thinking_hashes[2] &&
+        thinking_hashes[1]!=thinking_hashes[2]);
     unsigned cancelled_while_thinking=cancels;
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
     assert(cancels==cancelled_while_thinking+1 && fixture.phase==ONLINE_THINKING);
@@ -199,33 +257,66 @@ int main(void) {
     clock_us=4500000;refresh(NULL);snap("whale-blink");clock_us=2200000;
     fixture.phase=ONLINE_READY;fixture.mic=false;
     const unsigned volume_values[]={0,25,50,75,90,100,0};
+    uint32_t previous_volume=0,muted_volume=0;
     for(unsigned i=0;i<sizeof(volume_values)/sizeof(volume_values[0]);i++) {
         fixture.volume=volume_values[i];refresh(NULL);check();
         assert(volume_icon.value==(int)fixture.volume);
         assert(!lv_obj_has_flag(home_controls,LV_OBJ_FLAG_HIDDEN));
+        uint32_t rendered=icon_render_hash(&volume_icon);
+        if(i)assert(rendered!=previous_volume);else muted_volume=rendered;
+        if(i==6)assert(rendered==muted_volume);
+        previous_volume=rendered;
     }
     snap("muted");fixture.volume=75;refresh(NULL);snap("volume");
     /* Transport status is independent of the phase and microphone switch. */
     fixture.linked=true;fixture.mic=false;refresh(NULL);
     assert(link_icon.value && !mic_icon.value && !action_mic.value);
+    uint32_t connected=icon_render_hash(&link_icon),mic_off=icon_render_hash(&mic_icon);
     fixture.linked=false;fixture.mic=true;refresh(NULL);
     assert(!link_icon.value && mic_icon.value && action_mic.value);
+    assert(icon_render_hash(&link_icon)!=connected && icon_render_hash(&mic_icon)!=mic_off);
     snap("link-lost-mic-on");fixture.mic=false;fixture.linked=true;refresh(NULL);
     const int battery_values[]={-1,0,10,100,150};
     const char *battery_names[]={"battery-unknown","battery-empty","battery-low","battery-full","battery-clamped"};
+    uint32_t previous_battery=0;
     for(unsigned i=0;i<sizeof(battery_values)/sizeof(battery_values[0]);i++) {
         battery_value=battery_values[i];update_battery(NULL);check();snap(battery_names[i]);
         assert(battery_icon.value==(battery_value>100?100:battery_value));
+        uint32_t rendered=icon_render_hash(&battery_icon);
+        if(i)assert((rendered==previous_battery)==(i==4));
+        previous_battery=rendered;
     }
     battery_value=87;update_battery(NULL);
     fixture.audio_ok=false;strcpy(fixture.message,"音频不可用，请检查设备");refresh(NULL);
-    assert(!lv_obj_has_flag(caption,LV_OBJ_FLAG_HIDDEN));snap("audio-unavailable");
-    fixture.audio_ok=true;fixture.message[0]=0;refresh(NULL);assert(lv_obj_has_flag(caption,LV_OBJ_FLAG_HIDDEN));
+    assert(!strcmp(lv_label_get_text(title),fixture.message));snap("audio-unavailable");
+    fixture.audio_ok=true;fixture.message[0]=0;refresh(NULL);assert(strstr(lv_label_get_text(title),"已连接"));
     fixture.phase=ONLINE_ERROR;
-    strcpy(fixture.message,"后端断开，正在重连后端断开，正在重连");
+    strcpy(fixture.message,"后端断开，正在重连\n请检查网络和连接器");
     refresh(NULL);snap("long-message");
-    assert(!lv_obj_has_flag(caption,LV_OBJ_FLAG_HIDDEN));
+    assert(!strchr(lv_label_get_text(title),'\n') && strstr(lv_label_get_text(title),"请检查网络"));
+    assert(lv_anim_get(title,NULL));
+    uint32_t scroll_start=object_render_hash(title);
+    lv_tick_inc(500);lv_anim_refr_now();refresh(NULL);
+    assert(object_render_hash(title)!=scroll_start);snap("long-message-scrolled");
+    int32_t previous_offset=((lv_label_t *)title)->offset.x;
+    bool moved_left=false,moved_right=false;
+    for(unsigned i=0;i<200 && !moved_right;i++) {
+        lv_tick_inc(100);lv_anim_refr_now();
+        int32_t offset=((lv_label_t *)title)->offset.x;
+        moved_left|=offset<previous_offset;moved_right|=offset>previous_offset;
+        previous_offset=offset;
+    }
+    assert(moved_left && moved_right);
+    fixture.overlay=false;refresh(NULL);check();
+    assert(lv_obj_has_flag(title,LV_OBJ_FLAG_HIDDEN) && !lv_anim_get(title,NULL));
+    fixture.overlay=true;refresh(NULL);check();
+    assert(!lv_obj_has_flag(title,LV_OBJ_FLAG_HIDDEN) && lv_anim_get(title,NULL));
+    lv_tick_inc(500);lv_anim_refr_now();assert(((lv_label_t *)title)->offset.x<0);
+    strcpy(fixture.message,"配对码不一致\n请核对电脑与设备");refresh(NULL);check();
+    assert(((lv_label_t *)title)->offset.x==0);
+    assert(!strchr(lv_label_get_text(title),'\n'));
     fixture.phase=ONLINE_READY;fixture.message[0]=0;refresh(NULL);
+    check();assert(!lv_anim_get(title,NULL));
     online_ui_key(BSP_BTN_OK,BSP_BTN_PRESS);assert(!toggles);
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(toggles==1);
     online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);refresh(NULL);assert(volumes==1);
@@ -246,7 +337,7 @@ int main(void) {
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_PRESS);refresh(NULL);
     fixture.feedback_visible=true;strcpy(fixture.message,"正在录音，松开发送");
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_LONG);refresh(NULL);assert(fixture.ptt_recording);
-    assert(!lv_obj_has_flag(caption,LV_OBJ_FLAG_HIDDEN) && !lv_obj_has_flag(home_controls,LV_OBJ_FLAG_HIDDEN));snap("push-to-talk");
+    assert(!strcmp(lv_label_get_text(title),fixture.message) && !lv_obj_has_flag(home_controls,LV_OBJ_FLAG_HIDDEN));snap("push-to-talk");
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_RELEASE);online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
     assert(cancels==before_cancel+1 && ptt_presses==2 && ptt_starts==1 && ptt_releases==2 && !fixture.ptt_recording);
     fixture.feedback_visible=false;fixture.message[0]=0;
@@ -307,7 +398,7 @@ int main(void) {
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(fixture.cues);
     online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);
     assert(lv_obj_has_flag(header,LV_OBJ_FLAG_HIDDEN) && lv_obj_has_flag(home_controls,LV_OBJ_FLAG_HIDDEN));
-    assert(lv_obj_has_flag(caption,LV_OBJ_FLAG_HIDDEN));snap("home-clean");
+    assert(lv_obj_has_flag(title,LV_OBJ_FLAG_HIDDEN) && !lv_anim_get(title,NULL));snap("home-clean");
     online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);
     online_ui_key(BSP_BTN_UP,BSP_BTN_PRESS);online_ui_key(BSP_BTN_UP,BSP_BTN_LONG);refresh(NULL);
     assert(fixture.overlay && menu.page==ONLINE_SETTINGS);
@@ -393,7 +484,7 @@ int main(void) {
         online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(toggles==before);
         online_ui_key(BSP_BTN_OK,BSP_BTN_RELEASE);
     }
-    fixture.brightness=100;buttons_available=false;refresh(NULL);check();
-    assert(backlight==100);
+    fixture.brightness=100;fixture.overlay=true;buttons_available=false;refresh(NULL);check();
+    assert(backlight==100 && strstr(lv_label_get_text(title),"按键不可用"));
     puts("Online UI: both themes, phases, glyphs, clipping, bounds and controls PASS");
 }

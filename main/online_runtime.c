@@ -141,6 +141,8 @@ void online_snapshot(online_status_t *out) {
     portENTER_CRITICAL(&state_lock);*out=status;
     char feedback_text[sizeof(out->message)];
     online_feedback_text(&feedback,(uint64_t)(esp_timer_get_time()/1000),feedback_text,sizeof(feedback_text));
+    /* Progress labels point to immutable strings owned by online_state.c. */
+    out->progress=feedback.phase;
     out->feedback_visible=feedback_text[0]!='\0';
     if(out->feedback_visible)snprintf(out->message,sizeof(out->message),"%s",feedback_text);
     portEXIT_CRITICAL(&state_lock);

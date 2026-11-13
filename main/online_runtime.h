@@ -5,6 +5,7 @@ typedef struct {
     bool mic,linked,audio_ok,feedback_visible,ptt_recording,keep_awake;
     unsigned volume,level;
     char message[128];
+    const char *progress; /* Immutable local progress label, or NULL. */
     bool configured,password_set,token_set;
     char ssid[33],host[64];
     online_theme_t theme; bool theme_save_failed;

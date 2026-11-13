@@ -19,7 +19,7 @@ LV_FONT_DECLARE(mouthy_bean_zh_16);
 #define INK 0x173E3A
 #define PAPER 0xE9F8F3
 static lv_obj_t *face_layer,*pupils[2],*lids[2],*closed_eyes[2],*ears[2],*mouth,*teeth,*tongue,*smile;
-static lv_obj_t *title,*header,*caption,*footer,*setup_panel,*setup_text;
+static lv_obj_t *title,*header,*footer,*setup_panel,*setup_text;
 static lv_obj_t *home_controls,*background_image,*settings_list;
 static ui_icon_t link_icon,mic_icon,battery_icon,phase_icon,volume_icon;
 static ui_icon_t up_icon,ok_icon,down_icon,action_mic,stop_icon;
@@ -61,6 +61,36 @@ static void visibility(lv_obj_t *o,bool show) {
 }
 static void text_changed(lv_obj_t *o,const char *value) {
     if(strcmp(lv_label_get_text(o),value))lv_label_set_text(o,value);
+}
+static const char *home_status_text(const online_status_t *s) {
+    if(!buttons_available)return "按键不可用，请检查设备";
+    if(s->phase==ONLINE_SETUP)return "正在配网";
+    if(s->feedback_visible && s->message[0])return s->message;
+    if(s->phase==ONLINE_CONNECTING || s->phase==ONLINE_ERROR)
+        return s->message[0]?s->message:online_phase_text(s->phase);
+    if(!s->audio_ok)return "音频不可用，请检查设备";
+    if(!s->linked)return "后端未连接";
+    if(s->progress && s->progress[0])return s->progress;
+    if(s->phase==ONLINE_THINKING)return "正在思考";
+    if(s->phase==ONLINE_SPEAKING)return "正在回答";
+    if(s->mic)return "麦克风已开启";
+    return "Wi-Fi/后端已连接";
+}
+static void home_status_update(const char *value) {
+    /* Connection errors can contain newlines; keep every message on one line. */
+    char line[sizeof(((online_status_t *)0)->message)];size_t used=0;
+    for(const char *p=value;*p && used+1<sizeof(line);p++) {
+        char c=(*p=='\n' || *p=='\r' || *p=='\t')?' ':*p;
+        if(c==' ' && (!used || line[used-1]==' '))continue;
+        line[used++]=c;
+    }
+    if(used && line[used-1]==' ')used--;
+    line[used]='\0';
+    if(strcmp(lv_label_get_text(title),line)) {
+        /* A new warning starts at its beginning, not at the old scroll offset. */
+        lv_label_set_long_mode(title,LV_LABEL_LONG_SCROLL);
+        lv_label_set_text(title,line);
+    }
 }
 static void eye(int i,int x) {
     shape(face_layer,x,89,96,101,0x63A99D,48);
@@ -139,7 +169,17 @@ static void refresh(lv_timer_t *timer) {
         applied_theme=s.theme;
     }
     bool show_overlay=!home || setup || s.overlay;
-    text_changed(title,home?"鲸语":menu.page==ONLINE_SETTINGS?"设置":menu.page==ONLINE_DISPLAY?"系统设置":menu.page==ONLINE_CONNECTION?"状态信息":"重新配置？");
+    static int title_mode=-1;
+    int next_title_mode=home?(show_overlay?1:0):2;
+    if(title_mode!=next_title_mode) {
+        lv_obj_set_style_text_font(title,home?&mouthy_bean_zh_12:&mouthy_bean_zh_16,0);
+        lv_obj_set_y(title,home?10:8);
+        lv_label_set_long_mode(title,home?(show_overlay?LV_LABEL_LONG_SCROLL:LV_LABEL_LONG_CLIP):LV_LABEL_LONG_WRAP);
+        title_mode=next_title_mode;
+    }
+    if(home) {
+        if(show_overlay)home_status_update(home_status_text(&s));
+    } else text_changed(title,menu.page==ONLINE_SETTINGS?"设置":menu.page==ONLINE_DISPLAY?"系统设置":menu.page==ONLINE_CONNECTION?"状态信息":"重新配置？");
     visibility(header,show_overlay);visibility(title,show_overlay);
     visibility(link_icon.obj,show_overlay);visibility(mic_icon.obj,show_overlay);visibility(battery_icon.obj,show_overlay);
     static int displayed_background=-1;
@@ -159,11 +199,10 @@ static void refresh(lv_timer_t *timer) {
         displayed_background=selected;
     }
     visibility(face_layer,home && !setup && !whale);visibility(whale_layer,home && !setup && whale);
-    /* Normal phases belong to the character and icons; actionable faults keep
-     * their explanation, including audio errors reported in the ready phase. */
+    /* Actionable details use the top status line; leave room for phase icons. */
     bool detail=!buttons_available || s.feedback_visible || s.phase==ONLINE_ERROR || s.phase==ONLINE_CONNECTING ||
         (s.phase==ONLINE_READY && !s.audio_ok);
-    visibility(caption,home && !setup && s.overlay && detail);visibility(setup_panel,home && setup);
+    visibility(setup_panel,home && setup);
     visibility(phase_icon.obj,home && !setup && s.overlay && !detail && (s.phase!=ONLINE_READY || s.mic));
     visibility(home_controls,home && !setup && s.overlay && buttons_available);
     ui_icon_update(&link_icon,UI_LINK,s.linked,s.linked?0x28715E:INK);
@@ -274,7 +313,6 @@ static void refresh(lv_timer_t *timer) {
     visibility(mouth,speaking);
     visibility(smile,!speaking);
     visibility(tongue,speaking);
-    text_changed(caption,!buttons_available?"按键不可用，请检查设备":s.message[0]?s.message:online_phase_text(s.phase));
     text_changed(footer,"长按确定 · 设置");
 }
 static void update_battery(lv_timer_t *timer) {
@@ -288,7 +326,7 @@ void online_ui_enter(bool buttons_ok) {
     online_background_image_init();
     whale_avatar_view_init();
     lv_obj_t *screen=shape(NULL,0,0,240,320,0xE7F0FF,0);app_screen=screen;
-    title=label(screen,"鲸语",64,8,112,20,false,INK);
+    title=label(screen,"",64,8,112,20,false,INK);
     background_image=lv_image_create(screen);
     lv_image_set_src(background_image,whale_backgrounds[0]);
     lv_image_set_pivot(background_image,0,0);
@@ -327,11 +365,6 @@ void online_ui_enter(bool buttons_ok) {
     whale_image=lv_image_create(whale_layer);
     lv_obj_set_pos(whale_image,0,0);
     lv_image_set_src(whale_image,whale_avatar_view_source(ONLINE_AVATAR_IDLE));
-    caption=label(screen,"",12,246,216,38,false,INK);
-    lv_obj_set_style_bg_color(caption,lv_color_hex(PAPER),0);
-    lv_obj_set_style_bg_opa(caption,LV_OPA_60,0);
-    lv_obj_set_style_radius(caption,8,0);
-    lv_label_set_long_mode(caption,LV_LABEL_LONG_SCROLL_CIRCULAR);
     ui_icon_create(screen,&phase_icon,UI_MIC,178,8,20);
     setup_panel=shape(screen,8,42,224,240,PAPER,14);
     label(setup_panel,"连接设备热点",8,10,208,24,false,INK);

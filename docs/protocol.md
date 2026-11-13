@@ -96,6 +96,10 @@ the preference. Thinking animation is local presentation; it neither changes
 The device advertises `voice.feedback`; the connector echoes it only when supported.
 `voice.progress` carries `turnId` and `phase` (`capturing`, `recognizing`, `thinking`, `tool`, `synthesizing`, `playing`). Capturing does not pause the microphone. `voice.result` carries the same `turnId`, a status (`completed`, `cancelled`, `failed`) and an optional stable `code`. Duplicate terminal results and stale progress for settled turns are ignored.
 
+Supported progress phases map to local labels in the home screen's top status line.
+Actionable failure, long-wait and push-to-talk messages take priority over progress;
+long messages scroll horizontally. No server-provided prose is displayed.
+
 Failure explanations persist across ordinary listening updates until new valid input, a user action or connection failure. Turn failures preserve the microphone and transport, invalidate old playback and schedule one local cue. Arbitrary server prose is never rendered. Fatal protocol/transport failures retain the reconnect path. Legacy recoverable `error` codes are handled locally without requiring new feedback events.
 
 Streaming keeps one response ID through all chunks and waits for `playback.ended`. A partial synthesis failure or duration limit clears queued playback and reports failure, never successful delivery or automatic replay.

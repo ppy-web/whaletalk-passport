@@ -14,10 +14,12 @@ The app uses the official BSP and adapts Qwen Voice Bean's expressive face and
 conversation flow. Its on-device name is 鲸语. It defaults to Whale Girl, with
 the original mint face available as a second appearance. Both share setup,
 connection, ready, listening, thinking, speaking, error, settings and confirmed
-reconfiguration screens. Main labels and states use 16px fonts and the provisioning address uses 20px. Chinese labels use compiled font subsets; arbitrary
+reconfiguration screens. Main labels use 16px fonts, home status uses 12px and the provisioning address uses 20px. Chinese labels use compiled font subsets; arbitrary
 model-response transcripts are not displayed.
 
-The home title is centered. To its left, joined/broken chain links show the DSH
+The home status line shows connection, microphone, recording, conversation progress
+or errors at the top center. Longer messages scroll horizontally; errors and
+push-to-talk feedback take priority. To its left, joined/broken chain links show the DSH
 connection, followed by a microphone icon with a slash when disabled. An enabled
 microphone does not imply audio is currently uploading. The battery at the right
 fills with its measured charge, turns red at 15% or below, and shows a dash when
@@ -25,9 +27,9 @@ unknown. Normal listening, thinking and speech use a waveform, three dots and a
 speaker alongside the character; connection and error details remain readable.
 The three bottom groups map UP to volume, OK to the microphone, and DOWN to
 cancel. Five volume bars represent 25, 50, 75, 90 and 100%; a crossed speaker is
-muted. Each gesture hint has a rounded border and at most two icons; volume bars
-are integrated into the speaker indicator. The home screen omits the hold-OK
-hint; holding OK still opens settings.
+muted. Inactive volume bars are shown faintly. Each gesture hint has a rounded
+border and at most two icons; volume bars are integrated into the speaker
+indicator. The home screen omits the hold-OK hint; holding OK still opens settings.
 
 | Button | Home action |
 | --- | --- |
@@ -47,7 +49,7 @@ muted, local pre-roll is retained; a short cancellation press never uploads it.
 A connector supporting push-to-talk is required; older connectors retain short-press
 cancellation. Turning interface hints off also hides the recording indication.
 
-Settings groups appearance and screen controls under System settings (系统设置); select 返回设置 to go back, or hold OK to return home. Interface hints (界面提示) default to on. When off, the home screen shows only the background and character; title, status and button icons and messages are hidden, but the physical buttons still work. Provisioning remains visible. The preference survives restart; a save failure is shown in settings and toggling retries it. Home messages share a rounded, translucent panel and scroll when long without moving the bottom controls.
+Settings groups appearance and screen controls under System settings (系统设置); select 返回设置 to go back, or hold OK to return home. Interface hints (界面提示) default to on. When off, the home screen shows only the background and character; status and button icons and messages are hidden, but the physical buttons still work. Provisioning remains visible. The preference survives restart; a save failure is shown in settings and toggling retries it. Long home messages scroll in the top status line without moving the bottom controls.
 
 Sound cues (提示音) in System settings default to on and survive restart.
 Turning them off disables both operation and failure cues without changing spoken
@@ -159,6 +161,10 @@ Setup also installs an isolated Zig C compiler and Pillow in the repository's
 terminal PATH. Use that environment's Python with `tools/render_preview.py`
 to convert LVGL preview frames to PNG and an overview image.
 
+Home icons use antialiased alpha masks stored in flash. After changing the artwork,
+run `tools/generate_ui_icons.py` with Pillow, then run it with `--check` to verify
+the generated header.
+
 The first build downloads components pinned in `dependencies.lock`. Do not edit
 generated `build/` or `managed_components/`. The firmware gate uses isolated
 `build/firmware-build/sdkconfig` from tracked `sdkconfig.defaults`.
@@ -244,6 +250,6 @@ and [Qwen Voice Bean](https://github.com/liutaocode/esp32demo/tree/main/examples
 
 Choose Host, Xiaomi or Doubao recognition in the computer connector, independently of TTS. Xiaomi submits complete utterances; Doubao uploads during speech. Cloud recognition reuses the computer's saved keys and does not require Host ASR. The account still needs ASR access and quota; no provider credentials are stored on the device.
 
-After negotiating `voice.feedback`, character expressions and status icons show normal conversation without overlaying stage labels. After eight seconds of continuous waiting, a DOWN cancellation hint appears for three seconds; the bottom controls stay in place. Short speech, empty recognition and turn failures retain a reason and play one local cue at the device volume. Recoverable failures preserve the connection and microphone choice. New valid input clears the reason; cancellation stays quiet. The audio worker suppresses capture around the cue.
+After negotiating `voice.feedback`, the top status line shows capture, recognition, thinking and other progress alongside the character and icons. After eight seconds of continuous waiting, a DOWN cancellation hint appears for three seconds; the bottom controls stay in place. Short speech, empty recognition and turn failures retain a reason and play one local cue at the device volume. Recoverable failures preserve the connection and microphone choice. New valid input clears the reason; cancellation stays quiet. The audio worker suppresses capture around the cue.
 
 Supported TTS models stream after final reply text is ready. An interrupted or overlong stream stops with feedback without replaying spoken audio. The complete conversation text remains in DSH. Older connectors remain compatible with reduced feedback.
