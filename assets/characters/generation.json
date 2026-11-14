@@ -14,8 +14,8 @@
     "count": 6,
     "width": 240,
     "height": 285,
-    "format": "256-entry RGB565/A8 palette + I8 pixels; native scanline decoder",
-    "flash_bytes": 415008,
+    "format": "256-entry RGB565/A8 palette + losslessly packed I8 rows; native scanline decoder",
+    "flash_bytes": 249452,
     "pixel_row_bytes": 720
   },
   "notes": "Generator retained the square-cell canvas despite the first prompt's requested portrait cells. The square-cell artwork remains the canonical source. The compiler resamples and crops the high-resolution source into the enlarged screen composition before palette encoding; runtime drawing uses only one native RGB565/A8 row. Historical front atlases are not runtime assets. The side-view reference is unchanged.",
@@ -38,6 +38,32 @@
       "prompt": "Use case: background-extraction / precise alpha cleanup. Refine ONLY transparency in this existing six-expression atlas; preserve the characters, faces, bilateral headphones, extended waists/aprons, colors, exact positions, scale, 1536x1024 canvas and 3x2 equal-square grid. Do not redraw the characters or change expressions. Remove all gray/white fog and halos OUTSIDE the character silhouettes, making empty space truly alpha=0. For the LOWER 20% of EACH 512x512 cell only, apply a smooth alpha fade to the whole character (torso, apron and hair together): opaque at y=410, gradually transparent by y=494, and the FINAL 18 rows y=494..511 of EACH cell must be completely alpha=0 across the entire width. Ensure this applies independently to both atlas rows: the bottom of the top-row sprites fades to zero before y=512, not into the next row. This is a transparent opacity ramp, absolutely NO white paint, fog, light gradient, backdrop, glow or checkerboard. Keep all white headbands and upper clothing opaque, all faces and both headphones crisp and unchanged. Preserve clean antialiased hair edges above the lower fade. No cropping at the torso, no new art, no text. Deliver the same six-cell atlas as a genuine transparent PNG with only this alpha refinement."
     }
   ],
+  "added_atlases": {
+    "date": "2026-11-14",
+    "tool": "built-in image_gen.imagegen",
+    "cell_layout": "3x2, 512x512 per cell, idle/listening/thinking/speaking/blink/error",
+    "device_encoding": "Same 240x285 viewport with RGB565/A8 palette and lossless per-row index encoding.",
+    "sets": [
+      {
+        "theme": "whale_maid",
+        "input": "鲸鱼娘2.jpg",
+        "input_sha256": "588e624961406814e27b1185c9819639704323654373b49adf09f11bdac200c6",
+        "output": "whale-maid-atlas.png",
+        "prompt": "Use case: stylized-concept. Input image is the character and costume reference only. Create a recognizable new chibi portrait set of this blue whale maid. Retain the dark navy long rippling hair with blue tips, distinctive curved forelock, blue eyes, porcelain white ruffle maid crown, two visible natural whale-fin ears, the small cyan bow beside HER left fin, navy dress with warm gold buttons and white bib/apron. Keep a small dark neck bow and blue brooch. Aim for her lively open warmth and delicate navy, cobalt, and cream palette. Keep both hands offscreen; omit the lower-body tail. Do not invent headphones or earcups. Asset type: one production sprite sheet for a tiny 240x320 embedded LCD. Generate a 1536x1024 landscape transparent PNG with precisely 3 columns by 2 rows of identical 512x512 square cells and no gutter, in this exact reading order: top left calm closed-mouth smile (idle), top middle alert eyes with a small closed mouth (listening), top right pupils looking slightly up and small pursed mouth (thinking); bottom left clearly open-mouth cheerful talking (speaking), bottom middle both eyes closed in a soft blink, bottom right worried brows and small downturned mouth (error). Same character and pose, not six redesigns. Copy the exact same waist-up portrait at the exact same local position and scale into all six cells; change only eyebrows, eyes, and mouth. This registration is essential for animation on a small screen. Each cell: silhouette fits x=45..467, first hair/accessory around y=24; generous very readable head centered at x=256 with eye line at approximately y=224 and face filling the top 60 percent, upper torso continues through the last quarter. Entire hair and costume gently fade in genuine alpha through the final 64 px; fully transparent on EACH cell's edges. Present the character straight-on, no tilt. Use high quality, clean anime game portrait linework, simple cel shading, big readable shapes and strong ink edges for small display. No full body, no scenic background, no color backdrop, fog, shadows or checker tiles, no expression symbols, lettering, watermark, UI or cell borders. The only visible things are the six waist-up sprites. Keep whites on the costume fully opaque above the fade.",
+        "flash_bytes": 246957,
+        "transparent_background": true
+      },
+      {
+        "theme": "claude",
+        "input": "Claude.jpg",
+        "input_sha256": "c7b4c515236170533a5c4c2e094208b7c864e42e58773dbfa60750148fa9325f",
+        "output": "claude-atlas.png",
+        "prompt": "Use case: stylized-concept. Input image is the character and costume reference only. Create a recognizable chibi game portrait set of this copper-haired young librarian in the reference. Retain her flowing vermilion-copper hair and side-swept bangs, amber eyes, unmistakable orange sunburst hair pin and charcoal ribbon at the viewer's right temple, cream ruffle capelet with black and copper accents, matching small sunburst at the collar, and one slim dark book with a simple copper sunburst held low at viewer's left below the chin. Keep her reserved, attentive, warm personality and cream, ink, and burnt-orange palette. Don't invent headwear, headphones, glasses, or animals. Asset type: one production sprite sheet for a tiny 240x320 embedded LCD. Generate a 1536x1024 landscape transparent PNG with precisely 3 columns by 2 rows of identical 512x512 square cells and no gutter, in this exact reading order: top left calm closed-mouth smile (idle), top middle alert eyes with a small closed mouth (listening), top right pupils looking slightly up and small pursed mouth (thinking); bottom left clearly open-mouth cheerful talking (speaking), bottom middle both eyes closed in a soft blink, bottom right worried brows and small downturned mouth (error). Same character and pose, not six redesigns. Copy the exact same waist-up portrait at the exact same local position and scale into all six cells; change only eyebrows, eyes, and mouth. This registration is essential for animation on a small screen. Each cell: silhouette fits x=45..467, first hair/accessory around y=24; generous very readable head centered at x=256 with eye line at approximately y=224 and face filling the top 60 percent, upper torso continues through the last quarter. Entire hair and costume gently fade in genuine alpha through the final 64 px; fully transparent on EACH cell's edges. Present the character straight-on, no tilt. Use high quality, clean anime game portrait linework, simple cel shading, big readable shapes and strong ink edges for small display. No full body, no scenic background, no color backdrop, fog, shadows or checker tiles, no expression symbols, lettering, watermark, UI or cell borders. The only visible things are the six waist-up sprites. Keep whites on the costume fully opaque above the fade.",
+        "flash_bytes": 256720,
+        "transparent_background": true
+      }
+    ]
+  },
   "composition": {
     "portrait_size": [
       280,

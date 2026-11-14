@@ -26,6 +26,8 @@ typedef struct {
 static const theme_style_t theme_styles[ONLINE_THEME_COUNT]={
     [ONLINE_THEME_WHALE]={"界面：鲸鱼娘",0xE7F0FF,0xF5FAFF,0xCCDDF0,0xD9EDFF,0x2F6FA7},
     [ONLINE_THEME_MINT]={"界面：薄荷表情",YELLOW,PAPER,0xBADDCF,0xD2F6E8,0x267963},
+    [ONLINE_THEME_WHALE_MAID]={"界面：鲸鱼娘2",0xE7F0FF,0xF5FAFF,0xCCDDF0,0xD9EDFF,0x2F6FA7},
+    [ONLINE_THEME_CLAUDE]={"界面：Claude",0xFFF0DF,0xFFF8EE,0xECD1B6,0xFBE4CE,0x925325},
 };
 enum { SETTINGS_ROWS = ONLINE_MENU_COUNT };
 _Static_assert(SETTINGS_ROWS>=(int)ONLINE_DISPLAY_COUNT && SETTINGS_ROWS>=(int)ONLINE_SOUND_COUNT &&
@@ -47,7 +49,7 @@ static lv_obj_t *setup_qr[2];
 static lv_obj_t *home_controls,*background_image,*settings_list;
 static ui_icon_t link_icon,battery_icon,phase_icon,volume_icon;
 static ui_icon_t up_icon,ok_icon,down_icon,action_mic,stop_icon;
-static lv_obj_t *app_screen,*whale_layer,*whale_image;
+static lv_obj_t *app_screen,*portrait_layer,*portrait_image;
 static lv_obj_t *settings_layer,*configuration,*settings_footer,*settings_help;
 static lv_obj_t *status_value[4],*settings_choices[SETTINGS_ROWS];
 static lv_obj_t *bouncing_card;
@@ -311,23 +313,19 @@ static void refresh(lv_timer_t *timer) {
     }
     visibility(header,show_overlay);visibility(title,show_overlay);
     visibility(link_icon.obj,show_overlay);visibility(battery_icon.obj,show_overlay);
-    static int displayed_background=-1;
     online_background_t selected=online_background_normalize(s.background);
-    const uint8_t *encoded=online_background_data();
-    const lv_image_dsc_t *custom=encoded?online_background_image(encoded):NULL;
-    if(selected==ONLINE_BACKGROUND_CUSTOM && !custom)selected=ONLINE_BACKGROUND_DAY;
-    visibility(background_image,home && !setup && selected!=ONLINE_BACKGROUND_OFF);
-    if(displayed_background!=(int)selected && selected!=ONLINE_BACKGROUND_OFF) {
-        if(selected==ONLINE_BACKGROUND_CUSTOM) {
-            lv_image_set_src(background_image,custom);
-            lv_image_set_scale(background_image,256);
-        } else {
-            lv_image_set_src(background_image,whale_backgrounds[selected]);
-            lv_image_set_scale(background_image,256);
+    const lv_image_dsc_t *background=whale_backgrounds[selected];
+    if(selected==ONLINE_BACKGROUND_CUSTOM) {
+        background=online_background_image(online_background_data());
+        if(!background) {
+            selected=ONLINE_BACKGROUND_DAY;
+            background=whale_backgrounds[selected];
         }
-        displayed_background=selected;
     }
-    visibility(face_layer,home && !setup && mint);visibility(whale_layer,home && !setup && !mint);
+    visibility(background_image,home && !setup && background);
+    if(home && !setup && background && lv_image_get_src(background_image)!=background)
+        lv_image_set_src(background_image,background);
+    visibility(face_layer,home && !setup && mint);visibility(portrait_layer,home && !setup && !mint);
     /* Actionable details use the top status line; leave room for phase icons. */
     bool detail=!buttons_available || s.feedback_visible || s.phase==ONLINE_ERROR || s.phase==ONLINE_CONNECTING ||
         (s.phase==ONLINE_READY && !s.audio_ok);
@@ -341,12 +339,9 @@ static void refresh(lv_timer_t *timer) {
         s.phase==ONLINE_SPEAKING?UI_VOLUME:UI_LISTEN;
     ui_icon_update(&phase_icon,phase,s.phase==ONLINE_THINKING?(int)((now/350)%3):s.phase==ONLINE_SPEAKING?100:s.mic,INK);
     if(home && !setup && !mint) {
-        static int displayed_frame=-1;
         online_avatar_t frame=online_avatar_frame(s.phase,s.mic || s.ptt_recording,s.level,now);
-        if(displayed_frame!=(int)frame) {
-            lv_image_set_src(whale_image,whale_avatar_view_source(frame));
-            displayed_frame=frame;
-        }
+        const lv_image_dsc_t *source=whale_avatar_view_source(theme,frame);
+        if(lv_image_get_src(portrait_image)!=source)lv_image_set_src(portrait_image,source);
     }
     visibility(footer,home && setup);visibility(settings_layer,!home);
     if(menu.page!=ONLINE_SETTINGS && bouncing_card)stop_bounce();
@@ -418,7 +413,16 @@ static void refresh(lv_timer_t *timer) {
             text_changed(lv_obj_get_child(settings_choices[ONLINE_SOUND_BACK],0),"返回设置");
         } else if(display) {
             text_changed(lv_obj_get_child(settings_choices[ONLINE_DISPLAY_THEME],0),style->label);
-            const char *background_labels[]={"背景：晴海茶室","背景：星夜鲸梦","背景：自定义","背景：关闭"};
+            static const char *const background_labels[ONLINE_BACKGROUND_COUNT]={
+                [ONLINE_BACKGROUND_DAY]="背景：晴海茶室",
+                [ONLINE_BACKGROUND_NIGHT]="背景：星夜鲸梦",
+                [ONLINE_BACKGROUND_SPRING]="背景：春日樱庭",
+                [ONLINE_BACKGROUND_SUMMER]="背景：夏日浅滩",
+                [ONLINE_BACKGROUND_AUTUMN]="背景：秋枫暖湖",
+                [ONLINE_BACKGROUND_WINTER]="背景：冬日雪屋",
+                [ONLINE_BACKGROUND_CUSTOM]="背景：自定义",
+                [ONLINE_BACKGROUND_OFF]="背景：关闭",
+            };
             text_changed(lv_obj_get_child(settings_choices[ONLINE_DISPLAY_BACKGROUND],0),background_labels[selected]);
             char brightness[32];
             snprintf(brightness,sizeof(brightness),"亮度：%u%%",online_brightness_normalize(s.brightness));
@@ -486,7 +490,7 @@ void online_ui_enter(bool buttons_ok) {
     lv_obj_t *screen=shape(NULL,0,0,240,320,0xE7F0FF,0);app_screen=screen;
     title=label(screen,"",64,8,112,20,false,INK);
     background_image=lv_image_create(screen);
-    lv_image_set_src(background_image,whale_backgrounds[0]);
+    lv_image_set_src(background_image,whale_backgrounds[ONLINE_BACKGROUND_DAY]);
     lv_image_set_pivot(background_image,0,0);
     lv_obj_move_background(background_image);
     /* Individual rect blending keeps the photo visible without allocating an
@@ -517,11 +521,10 @@ void online_ui_enter(bool buttons_ok) {
     lv_obj_set_style_arc_opa(smile,LV_OPA_COVER,LV_PART_INDICATOR);
     lv_obj_set_style_arc_width(smile,4,LV_PART_INDICATOR);
     lv_obj_set_style_arc_rounded(smile,true,LV_PART_INDICATOR);
-    whale_layer=shape(screen,0,WHALE_VIEW_TOP,WHALE_VIEW_WIDTH,WHALE_VIEW_HEIGHT,0xE7F0FF,0);
-    lv_obj_set_style_bg_opa(whale_layer,LV_OPA_TRANSP,0);
-    whale_image=lv_image_create(whale_layer);
-    lv_obj_set_pos(whale_image,0,0);
-    lv_image_set_src(whale_image,whale_avatar_view_source(ONLINE_AVATAR_IDLE));
+    portrait_layer=shape(screen,0,WHALE_VIEW_TOP,WHALE_VIEW_WIDTH,WHALE_VIEW_HEIGHT,0xE7F0FF,0);
+    lv_obj_set_style_bg_opa(portrait_layer,LV_OPA_TRANSP,0);
+    portrait_image=lv_image_create(portrait_layer);
+    lv_obj_set_pos(portrait_image,0,0);
     ui_icon_create(screen,&phase_icon,UI_MIC,178,8,20);
     setup_panel=shape(screen,8,42,224,248,PAPER,14);
     label(setup_panel,"手机扫码配网",8,8,208,24,false,INK);

@@ -1,7 +1,7 @@
 {
   "date": "2026-11-05",
   "tool": "built-in image_gen.imagegen (no CLI/API fallback)",
-  "purpose": "Downloadable custom-background examples; not embedded in firmware",
+  "purpose": "Downloadable background examples. The four seasonal PNGs also supply the indexed built-in presets.",
   "conversion": "Pillow ImageOps.fit to 240x320 RGB PNG using LANCZOS, no artwork retouching. Upload page performs its own 96x128 / 16-color conversion.",
   "assets": [
     {

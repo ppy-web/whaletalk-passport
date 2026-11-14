@@ -68,6 +68,15 @@ int main(void) {
     assert(online_background_load()==ONLINE_BACKGROUND_NIGHT);
     assert(online_background_save(ONLINE_BACKGROUND_OFF));
     assert(online_background_load()==ONLINE_BACKGROUND_OFF);
+    const online_background_t seasons[]={ONLINE_BACKGROUND_SPRING,ONLINE_BACKGROUND_SUMMER,
+        ONLINE_BACKGROUND_AUTUMN,ONLINE_BACKGROUND_WINTER};
+    for(unsigned i=0;i<sizeof(seasons)/sizeof(*seasons);i++) {
+        assert(online_background_save(seasons[i]));
+        assert(online_background_load()==seasons[i]);
+        assert(stored_size==sizeof(image) && !memcmp(stored,image,sizeof(image)));
+    }
+    assert(!online_background_save(ONLINE_BACKGROUND_COUNT));
+    assert(online_background_load()==ONLINE_BACKGROUND_WINTER);
     assert(online_background_save(ONLINE_BACKGROUND_NIGHT));
     fail_commit=true;assert(!online_background_save(ONLINE_BACKGROUND_DAY));
     assert(online_background_load()==ONLINE_BACKGROUND_NIGHT);

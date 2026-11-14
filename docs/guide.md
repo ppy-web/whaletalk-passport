@@ -11,10 +11,10 @@ required. The computer must keep DSH running.
 
 ESP32-C3, 8 MB Flash, no PSRAM, 240×320 screen, ES8311 audio and three buttons.
 The app uses the official BSP and adapts Qwen Voice Bean's expressive face and
-conversation flow. Its on-device name is 鲸语. It defaults to Whale Girl, with
-the original mint face available as a second appearance. Both share setup,
-connection, ready, listening, thinking, speaking, error, settings and confirmed
-reconfiguration screens. Main labels use 16px fonts, home status uses 12px and the provisioning address uses 20px. Chinese labels use compiled font subsets; arbitrary
+conversation flow. Its on-device name is 鲸语. It defaults to Whale Girl. Mint
+Face, Whale Girl 2 and Claude are also available. All four share setup,
+connection, ready, listening, thinking, speaking, error and settings screens.
+Main labels use 16px fonts, home status uses 12px and the provisioning address uses 20px. Chinese labels use compiled font subsets; arbitrary
 model-response transcripts are not displayed.
 
 The home status line shows connection progress, recording, conversation progress
@@ -81,8 +81,9 @@ Thinking cycles through thoughtful, attentive and blinking expressions every
 3.2 seconds, alongside bouncing dots. It remains in the real processing phase
 and DOWN still cancels. The animation itself does not shorten recognition, model or TTS latency.
 
-In System settings (系统设置), Background (背景) cycles Seaside Tea, Moonlit Dream and an available
-custom background, and Off (关闭). Off shows the character against the theme color and retains the uploaded image. Selection applies immediately, survives restart and is saved
+In System settings (系统设置), Background (背景) cycles Seaside Tea, Moonlit Dream, Spring Sakura,
+Summer Shore, Autumn Maple, Winter Snow, an available custom background, and Off (关闭).
+Off shows the character against the theme color and retains the uploaded image. Selection applies immediately, survives restart and is saved
 after thinking/speech finishes. Failed saves can be retried. The System settings list
 scrolls with UP/DOWN.
 Select 上传背景 to restart into the setup hotspot, interrupting voice while keeping
@@ -147,11 +148,12 @@ the microphone. Doubao recognition uploads while capture continues. Capture paus
 speaker completion is acknowledged. No automatic voice interruption or acoustic
 echo cancellation is provided. Handle tool approvals in DSH.
 
-Hold OK, open System settings (系统设置), select Interface (界面), and briefly press OK to switch
-between Whale Girl and the mint face. Hold OK again to return home. The choice
+Hold OK, open System settings (系统设置), and briefly press OK on Interface (界面)
+to cycle Whale Girl → Mint Face → Whale Girl 2 → Claude. Hold OK again to return home. The choice
 survives restart without changing Wi-Fi, pairing or the conversation. Saving is
-deferred during speech/thinking, and a failed save is shown in settings. Whale
-Girl has six expression frames; see [asset provenance and build details](whale-girl-assets.md).
+deferred during speech/thinking, and a failed save is shown in settings. Each
+portrait has idle, listening, thinking, speaking, blink and error expressions.
+See [asset provenance and build details](whale-girl-assets.md).
 
 ## Development and builds
 

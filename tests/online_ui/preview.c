@@ -116,56 +116,93 @@ static void snap(const char *name){
     }
     fclose(f);lv_draw_buf_destroy(b);
 }
-int main(void) {
-    lv_init();assert(lv_display_create(240,320));fixture.volume=75;fixture.audio_ok=true;fixture.overlay=true;fixture.cues=true;
-    check_icon_flash_sources();
-    online_ui_enter(true);
+static const char *const theme_names[ONLINE_THEME_COUNT]={
+    [ONLINE_THEME_WHALE]="whale",[ONLINE_THEME_MINT]="mint",
+    [ONLINE_THEME_WHALE_MAID]="whale-maid",[ONLINE_THEME_CLAUDE]="claude",
+};
+static void check_portrait_decoding(online_theme_t theme) {
     for(unsigned frame=0;frame<ONLINE_AVATAR_COUNT;frame++) {
+        const lv_image_dsc_t *source=whale_avatar_view_source(theme,(online_avatar_t)frame);
         lv_image_decoder_dsc_t decoder;
-        assert(lv_image_decoder_open(&decoder,whale_avatar_view_source((online_avatar_t)frame),NULL)==LV_RESULT_OK);
+        assert(source && lv_image_decoder_open(&decoder,source,NULL)==LV_RESULT_OK);
         assert(decoder.args.no_cache && decoder.decoded==NULL);
         lv_area_t full={0,0,239,284},area={LV_COORD_MIN,LV_COORD_MIN,LV_COORD_MIN,LV_COORD_MIN};
         unsigned rows=0,alpha_total=0;
-        uint8_t reference_row[240*3];
+        const int sample_rows[]={1,71,134,258};
+        uint8_t reference[sizeof(sample_rows)/sizeof(*sample_rows)][240*3];
         while(lv_image_decoder_get_area(&decoder,&full,&area)==LV_RESULT_OK) {
             const lv_draw_buf_t *row=decoder.decoded;
             assert(row && row->data_size<=1024);
             for(unsigned n=0;n<240;n++)alpha_total+=row->data[row->header.stride+n];
-            if(area.y1==71) {
-                memcpy(reference_row,row->data,240*2);
-                memcpy(reference_row+240*2,row->data+row->header.stride,240);
+            for(unsigned n=0;n<sizeof(sample_rows)/sizeof(*sample_rows);n++)if(area.y1==sample_rows[n]) {
+                memcpy(reference[n],row->data,240*2);
+                memcpy(reference[n]+240*2,row->data+row->header.stride,240);
             }
             rows++;
         }
         assert(rows==285 && alpha_total>1000);
         lv_image_decoder_close(&decoder);
-        assert(lv_image_decoder_open(&decoder,whale_avatar_view_source((online_avatar_t)frame),NULL)==LV_RESULT_OK);
-        full=(lv_area_t){5,71,227,71};area=(lv_area_t){LV_COORD_MIN,LV_COORD_MIN,LV_COORD_MIN,LV_COORD_MIN};
-        assert(lv_image_decoder_get_area(&decoder,&full,&area)==LV_RESULT_OK);
-        const lv_draw_buf_t *row=decoder.decoded;
-        for(unsigned n=0;n<223;n++) {
-            assert(!memcmp(row->data+n*2,reference_row+(n+5)*2,2));
-            assert(row->data[row->header.stride+n]==reference_row[480+n+5]);
+        assert(!decoder.decoded && !decoder.user_data);
+        for(unsigned i=0;i<sizeof(sample_rows)/sizeof(*sample_rows);i++) {
+            assert(lv_image_decoder_open(&decoder,source,NULL)==LV_RESULT_OK);
+            full=(lv_area_t){5,sample_rows[i],227,sample_rows[i]};
+            area=(lv_area_t){LV_COORD_MIN,LV_COORD_MIN,LV_COORD_MIN,LV_COORD_MIN};
+            assert(lv_image_decoder_get_area(&decoder,&full,&area)==LV_RESULT_OK);
+            const lv_draw_buf_t *row=decoder.decoded;
+            for(unsigned n=0;n<223;n++) {
+                assert(!memcmp(row->data+n*2,reference[i]+(n+5)*2,2));
+                assert(row->data[row->header.stride+n]==reference[i][480+n+5]);
+            }
+            assert(lv_image_decoder_get_area(&decoder,&full,&area)==LV_RESULT_INVALID);
+            lv_image_decoder_close(&decoder);
         }
-        assert(lv_image_decoder_get_area(&decoder,&full,&area)==LV_RESULT_INVALID);
-        lv_image_decoder_close(&decoder);
     }
+}
+int main(void) {
+    lv_init();assert(lv_display_create(240,320));fixture.volume=75;fixture.audio_ok=true;fixture.overlay=true;fixture.cues=true;
+    check_icon_flash_sources();
+    online_ui_enter(true);
+    assert(!whale_avatar_view_source(ONLINE_THEME_MINT,ONLINE_AVATAR_IDLE));
+    assert(!whale_avatar_view_source(ONLINE_THEME_COUNT,ONLINE_AVATAR_IDLE));
     const char *messages[]={"DSH-Voice-1234","正在连接后端","确定：开始对话","我在认真听","正在请教 Agent","DSH","后端消息过大或分片无效"};
     const char *names[]={"setup","connecting","ready","listening","thinking","speaking","error"};
-    for(unsigned theme=0;theme<2;theme++) {
+    uint32_t idle_hashes[ONLINE_THEME_COUNT]={0};
+    for(unsigned theme=0;theme<ONLINE_THEME_COUNT;theme++) {
         fixture.theme=online_theme_normalize(theme);
+        bool portrait=theme!=ONLINE_THEME_MINT;
+        uint32_t expressions[ONLINE_AVATAR_COUNT]={0};
+        if(portrait)check_portrait_decoding(fixture.theme);
         for(unsigned i=0;i<7;i++){
             fixture.phase=i;fixture.mic=i>=3 && i<=5;fixture.level=19000;
             fixture.linked=i>=ONLINE_READY && i<=ONLINE_SPEAKING;
+            clock_us=i==ONLINE_THINKING?2400000:2200000;
             snprintf(fixture.message,sizeof(fixture.message),"%s",messages[i]);refresh(NULL);
-            char name[48];snprintf(name,sizeof(name),"%s-%s",theme==ONLINE_THEME_WHALE?"whale":"mint",names[i]);snap(name);
-            assert(lv_obj_has_flag(whale_layer,LV_OBJ_FLAG_HIDDEN)==(i==ONLINE_SETUP || theme!=ONLINE_THEME_WHALE));
+            char name[48];snprintf(name,sizeof(name),"%s-%s",theme_names[theme],names[i]);snap(name);
+            assert(lv_obj_has_flag(portrait_layer,LV_OBJ_FLAG_HIDDEN)==(i==ONLINE_SETUP || !portrait));
             assert(lv_obj_has_flag(face_layer,LV_OBJ_FLAG_HIDDEN)==(i==ONLINE_SETUP || theme!=ONLINE_THEME_MINT));
+            if(portrait && i>=ONLINE_READY) {
+                const online_avatar_t frames[]={ONLINE_AVATAR_IDLE,ONLINE_AVATAR_LISTENING,ONLINE_AVATAR_THINKING,
+                    ONLINE_AVATAR_SPEAKING,ONLINE_AVATAR_ERROR};
+                expressions[frames[i-ONLINE_READY]]=object_render_hash(portrait_layer);
+            }
             assert(!lv_obj_has_flag(title,LV_OBJ_FLAG_HIDDEN));
             if(i==ONLINE_ERROR || i==ONLINE_CONNECTING)assert(!strcmp(lv_label_get_text(title),messages[i]));
             assert(lv_obj_has_flag(home_controls,LV_OBJ_FLAG_HIDDEN)==(i==ONLINE_SETUP));
         }
+        if(portrait) {
+            clock_us=4500000;fixture.phase=ONLINE_READY;fixture.mic=false;fixture.linked=true;refresh(NULL);
+            char name[48];snprintf(name,sizeof(name),"%s-blink",theme_names[theme]);snap(name);
+            expressions[ONLINE_AVATAR_BLINK]=object_render_hash(portrait_layer);
+            for(unsigned i=0;i<ONLINE_AVATAR_COUNT;i++) {
+                assert(expressions[i]);
+                for(unsigned j=0;j<i;j++)assert(expressions[i]!=expressions[j]);
+            }
+            idle_hashes[theme]=expressions[ONLINE_AVATAR_IDLE];clock_us=2200000;
+        }
     }
+    assert(idle_hashes[ONLINE_THEME_WHALE]!=idle_hashes[ONLINE_THEME_WHALE_MAID]);
+    assert(idle_hashes[ONLINE_THEME_WHALE]!=idle_hashes[ONLINE_THEME_CLAUDE]);
+    assert(idle_hashes[ONLINE_THEME_WHALE_MAID]!=idle_hashes[ONLINE_THEME_CLAUDE]);
     fixture.theme=ONLINE_THEME_WHALE;fixture.phase=ONLINE_CONNECTING;
     const char *connections[]={"正在连接 Wi-Fi","Wi-Fi 断开，正在重试", "正在连接后端","后端断开，正在重连"};
     for(unsigned i=0;i<sizeof(connections)/sizeof(connections[0]);i++) {
@@ -216,8 +253,12 @@ int main(void) {
     assert(lv_obj_has_flag(background_image,LV_OBJ_FLAG_HIDDEN));snap("background-off-whale");
     fixture.theme=ONLINE_THEME_MINT;refresh(NULL);snap("background-off-mint");
     assert(!lv_obj_has_flag(face_layer,LV_OBJ_FLAG_HIDDEN));
+    fixture.theme=ONLINE_THEME_CLAUDE;refresh(NULL);snap("claude-off");
     fixture.theme=ONLINE_THEME_WHALE;fixture.background=ONLINE_BACKGROUND_NIGHT;refresh(NULL);
     assert(!lv_obj_has_flag(background_image,LV_OBJ_FLAG_HIDDEN));snap("background-night");
+    fixture.theme=ONLINE_THEME_WHALE_MAID;refresh(NULL);snap("whale-maid-night");
+    fixture.theme=ONLINE_THEME_CLAUDE;refresh(NULL);snap("claude-night");
+    fixture.theme=ONLINE_THEME_WHALE;
     fixture.custom_background=true;fixture.background=ONLINE_BACKGROUND_CUSTOM;
     const uint8_t bg_header[]={'W','T','B','G',1,96,128,16};memcpy(custom_data,bg_header,sizeof(bg_header));
     custom_data[8]=0xff;custom_data[9]=0xcf;custom_data[10]=0x1f;custom_data[11]=0xf7;
@@ -225,6 +266,9 @@ int main(void) {
     refresh(NULL);snap("background-custom");
     custom_data[8]=0;custom_data[9]=0;custom_data[10]=0x82;custom_data[11]=0x08;
     refresh(NULL);snap("background-custom-dark");
+    fixture.theme=ONLINE_THEME_WHALE_MAID;refresh(NULL);snap("whale-maid-custom-dark");
+    fixture.theme=ONLINE_THEME_CLAUDE;refresh(NULL);snap("claude-custom-dark");
+    fixture.theme=ONLINE_THEME_WHALE;refresh(NULL);
     fixture.phase=ONLINE_ERROR;strcpy(fixture.message,"请在 DSH 刷新预设");refresh(NULL);snap("custom-dark-preset-error");
     fixture.phase=ONLINE_THINKING;custom_data[8]=0xff;custom_data[9]=0xcf;custom_data[10]=0x1f;custom_data[11]=0xf7;
     /* Repeated clipped decoding must stay scanline-sized and never cache a
@@ -256,7 +300,7 @@ int main(void) {
     fixture.custom_background=false;refresh(NULL);snap("background-custom-fallback");
     fixture.background=ONLINE_BACKGROUND_DAY;clock_us=2200000;refresh(NULL);
     fixture.theme=ONLINE_THEME_WHALE;fixture.phase=ONLINE_READY;fixture.mic=false;
-    clock_us=4500000;refresh(NULL);snap("whale-blink");clock_us=2200000;
+    clock_us=2200000;
     fixture.phase=ONLINE_READY;fixture.mic=false;
     const unsigned volume_values[]={0,25,50,75,90,100,0};
     uint32_t previous_volume=0,muted_volume=0;
@@ -361,15 +405,51 @@ int main(void) {
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(menu.page==ONLINE_SETTINGS && menu.selected==ONLINE_MENU_STATUS);
     online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);refresh(NULL);
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(menu.page==ONLINE_DISPLAY);
-    online_theme_t before=fixture.theme;
-    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(themes==1 && fixture.theme!=before);
-    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(themes==2 && fixture.theme==before);
+    assert(fixture.theme==ONLINE_THEME_WHALE && fixture.phase==ONLINE_READY && !fixture.mic);
+    const online_theme_t choices[]={ONLINE_THEME_MINT,ONLINE_THEME_WHALE_MAID,ONLINE_THEME_CLAUDE,ONLINE_THEME_WHALE};
+    const char *labels[]={"薄荷表情","鲸鱼娘2","Claude","鲸鱼娘"};
+    online_background_t background_before_switch=fixture.background;
+    for(unsigned i=0;i<ONLINE_THEME_COUNT;i++) {
+        online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);
+        assert(themes==i+1 && fixture.theme==choices[i]);
+        assert(fixture.background==background_before_switch);
+        assert(strstr(lv_label_get_text(lv_obj_get_child(settings_choices[ONLINE_DISPLAY_THEME],0)),labels[i]));
+        if(choices[i]==ONLINE_THEME_CLAUDE || choices[i]==ONLINE_THEME_WHALE_MAID) {
+            char name[48];snprintf(name,sizeof(name),"%s-settings",theme_names[choices[i]]);snap(name);
+        }
+        /* Keep the idle expression across a real settings/home round trip. */
+        online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);
+        assert(menu.page==ONLINE_HOME);
+        if(choices[i]==ONLINE_THEME_MINT)assert(lv_obj_is_visible(face_layer));
+        else assert(object_render_hash(portrait_layer)==idle_hashes[choices[i]]);
+        online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);
+        online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);
+        assert(menu.page==ONLINE_DISPLAY && menu.selected==ONLINE_DISPLAY_THEME);
+    }
     snap("settings-empty");
     fixture.configured=true;fixture.token_set=true;strcpy(fixture.ssid,"Home Wi-Fi");strcpy(fixture.host,"192.168.1.10:3101");
     refresh(NULL);snap("settings");
     strcpy(fixture.ssid,"12345678901234567890123456789012");refresh(NULL);check();
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(fixture.background==ONLINE_BACKGROUND_NIGHT);
+    const online_background_t seasons[]={ONLINE_BACKGROUND_SPRING,ONLINE_BACKGROUND_SUMMER,
+        ONLINE_BACKGROUND_AUTUMN,ONLINE_BACKGROUND_WINTER};
+    const char *season_names[]={"spring","summer","autumn","winter"};
+    uint32_t season_hashes[sizeof(seasons)/sizeof(*seasons)];
+    for(unsigned i=0;i<sizeof(seasons)/sizeof(*seasons);i++) {
+        online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);
+        assert(fixture.background==seasons[i] && menu.page==ONLINE_DISPLAY);
+        char name[48];snprintf(name,sizeof(name),"background-%s-settings",season_names[i]);snap(name);
+        online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);
+        assert(menu.page==ONLINE_HOME && lv_obj_is_visible(background_image));
+        snprintf(name,sizeof(name),"background-%s",season_names[i]);snap(name);
+        season_hashes[i]=object_render_hash(background_image);
+        for(unsigned n=0;n<i;n++)assert(season_hashes[i]!=season_hashes[n]);
+        online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);
+        online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);
+        online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
+        assert(menu.page==ONLINE_DISPLAY && menu.selected==ONLINE_DISPLAY_BACKGROUND);
+    }
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(fixture.background==ONLINE_BACKGROUND_OFF);
     assert(strstr(lv_label_get_text(lv_obj_get_child(settings_choices[ONLINE_DISPLAY_BACKGROUND],0)),"关闭"));
     snap("settings-background-off");
@@ -569,5 +649,5 @@ int main(void) {
     assert(menu.page==ONLINE_HOME && network_switches==5 && selected_network==0);
     fixture.phase=ONLINE_READY;buttons_available=false;refresh(NULL);check();
     assert(backlight==100 && strstr(lv_label_get_text(title),"按键不可用"));
-    puts("Online UI: both themes, phases, glyphs, clipping, bounds and controls PASS");
+    puts("Online UI: theme switching, portrait rendering, phases, glyphs, clipping and controls PASS");
 }

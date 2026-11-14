@@ -10,6 +10,8 @@ add_executable(preview preview.c "${REPO_ROOT}/main/online_state.c" "${REPO_ROOT
     "${REPO_ROOT}/main/online_background_format.c"
     "${REPO_ROOT}/main/whale_avatar_view.c"
     "${REPO_ROOT}/assets/characters/whale_avatar.c"
+    "${REPO_ROOT}/assets/characters/whale_maid_avatar.c"
+    "${REPO_ROOT}/assets/characters/claude_avatar.c"
     "${REPO_ROOT}/assets/backgrounds/whale_backgrounds.c"
     "${REPO_ROOT}/assets/fonts/mouthy_bean_zh_12.c" "${REPO_ROOT}/assets/fonts/mouthy_bean_zh_16.c")
 target_include_directories(preview PRIVATE "stubs" "${REPO_ROOT}/main")

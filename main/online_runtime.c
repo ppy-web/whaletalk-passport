@@ -300,7 +300,9 @@ static void theme_task(void *arg) {
         unsigned revision=atomic_load(&theme_revision),idle_changed=atomic_load(&idle_revision),
             background_changed=atomic_load(&background_revision),brightness_changed=atomic_load(&brightness_revision);
         if(revision!=saved_revision && snapshot.phase!=ONLINE_SPEAKING && snapshot.phase!=ONLINE_THINKING) {
-            bool saved=online_theme_save(snapshot.theme);
+            /* Read the selection after the revision. A snapshot taken before a
+             * button press can carry the previous choice with the new revision. */
+            bool saved=online_theme_save(online_theme_normalize(atomic_load(&selected_theme)));
             atomic_store(&theme_save_failed,!saved);
             if(!saved)ESP_LOGW("whale_theme","theme persistence failed");
             saved_revision=revision;
@@ -312,7 +314,7 @@ static void theme_task(void *arg) {
             saved_idle_revision=idle_changed;
         }
         if(background_changed!=saved_background_revision && snapshot.phase!=ONLINE_SPEAKING && snapshot.phase!=ONLINE_THINKING) {
-            bool ok=online_background_save(snapshot.background);
+            bool ok=online_background_save(online_background_normalize(atomic_load(&selected_background)));
             atomic_store(&background_save_failed,!ok);
             if(!ok)ESP_LOGW("whale_theme","background preference persistence failed");
             saved_background_revision=background_changed;

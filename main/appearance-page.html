@@ -26,8 +26,12 @@
   <p>选一处喜欢的风景，或换上自己的图片。保存背景会重启设备，已保存的连接信息会保留。</p>
   <div class="workspace">
     <fieldset class="choices"><legend>选择背景</legend>
-      <label class="choice"><input type="radio" name="background" value="0" checked><span>晴海茶室<small>海风、蕾丝与午后茶</small></span></label>
-      <label class="choice"><input type="radio" name="background" value="1"><span>星夜鲸梦<small>月光与鲸鱼星座</small></span></label>
+      <label class="choice"><input type="radio" name="background" value="0" data-preview="/background-day.png" checked><span>晴海茶室<small>海风、蕾丝与午后茶</small></span></label>
+      <label class="choice"><input type="radio" name="background" value="1" data-preview="/background-night.png"><span>星夜鲸梦<small>月光与鲸鱼星座</small></span></label>
+      <label class="choice"><input type="radio" name="background" value="4" data-preview="/background-season.bmp?id=4"><span>春日樱庭</span></label>
+      <label class="choice"><input type="radio" name="background" value="5" data-preview="/background-season.bmp?id=5"><span>夏日浅滩</span></label>
+      <label class="choice"><input type="radio" name="background" value="6" data-preview="/background-season.bmp?id=6"><span>秋枫暖湖</span></label>
+      <label class="choice"><input type="radio" name="background" value="7" data-preview="/background-season.bmp?id=7"><span>冬日雪屋</span></label>
       <label class="choice"><input type="radio" name="background" value="2" disabled><span>自定义<small id="customHint">先上传一张图片</small></span></label>
       <label class="choice"><input type="radio" name="background" value="3"><span>关闭背景<small>显示角色与界面底色</small></span></label>
     </fieldset>
@@ -47,7 +51,13 @@
   const radios=Array.from(document.querySelectorAll('[name=background]'))
   let nonce='',busy=false,preparing=false,pending=null,pendingPreview='',converted='',customAvailable=false,generation=0
   function controls(){apply.disabled=!nonce||busy||preparing||!!pending;upload.disabled=!nonce||busy||preparing||!pending;file.disabled=busy||!nonce;radios.forEach(r=>r.disabled=busy||r.value==='2'&&!customAvailable)}
-  function show(){const kind=radios.find(r=>r.checked)?.value||'0';preview.style.visibility=kind==='3'||kind==='2'&&!converted?'hidden':'visible';preview.src=kind==='0'?'/background-day.png':kind==='1'?'/background-night.png':converted||'/background-day.png';document.getElementById('previewHint').textContent=kind==='3'?'关闭背景后显示角色与界面底色':kind==='2'&&!converted?'已保存的自定义背景；设备上可查看':'背景预览，角色会叠加显示'}
+  function show(){
+    const selected=radios.find(r=>r.checked)||radios[0]
+    const missingCustom=selected.value==='2'&&!converted,off=selected.value==='3'
+    preview.style.visibility=off||missingCustom?'hidden':'visible'
+    preview.src=selected.dataset.preview||converted||radios[0].dataset.preview
+    document.getElementById('previewHint').textContent=off?'关闭背景后显示角色与界面底色':missingCustom?'已保存的自定义背景；设备上可查看':'背景预览，角色会叠加显示'
+  }
   radios.forEach(r=>r.onchange=()=>{generation++;pending=null;preparing=false;show();controls();status.textContent=''})
   fetch('/current',{cache:'no-store',signal:AbortSignal.timeout(10000)}).then(r=>{if(!r.ok)throw Error();return r.json()}).then(data=>{
     nonce=data.nonce;customAvailable=!!data.customBackground

@@ -185,17 +185,24 @@ bool online_endpoint_from_ip_port(const char *ip,unsigned port,char *out,size_t 
 }
 
 online_theme_t online_theme_normalize(unsigned stored) {
-    return stored==ONLINE_THEME_MINT?ONLINE_THEME_MINT:ONLINE_THEME_WHALE;
+    return stored<ONLINE_THEME_COUNT?(online_theme_t)stored:ONLINE_THEME_WHALE;
 }
 online_background_t online_background_normalize(unsigned stored) {
-    return stored<=ONLINE_BACKGROUND_OFF?(online_background_t)stored:ONLINE_BACKGROUND_DAY;
+    return stored<ONLINE_BACKGROUND_COUNT?(online_background_t)stored:ONLINE_BACKGROUND_DAY;
 }
 online_background_t online_background_next(online_background_t current,bool has_custom) {
-    current=online_background_normalize(current);
-    if(current==ONLINE_BACKGROUND_DAY)return ONLINE_BACKGROUND_NIGHT;
-    if(current==ONLINE_BACKGROUND_NIGHT)return has_custom?ONLINE_BACKGROUND_CUSTOM:ONLINE_BACKGROUND_OFF;
-    if(current==ONLINE_BACKGROUND_CUSTOM)return ONLINE_BACKGROUND_OFF;
-    return ONLINE_BACKGROUND_DAY;
+    static const online_background_t next[ONLINE_BACKGROUND_COUNT]={
+        [ONLINE_BACKGROUND_DAY]=ONLINE_BACKGROUND_NIGHT,
+        [ONLINE_BACKGROUND_NIGHT]=ONLINE_BACKGROUND_SPRING,
+        [ONLINE_BACKGROUND_SPRING]=ONLINE_BACKGROUND_SUMMER,
+        [ONLINE_BACKGROUND_SUMMER]=ONLINE_BACKGROUND_AUTUMN,
+        [ONLINE_BACKGROUND_AUTUMN]=ONLINE_BACKGROUND_WINTER,
+        [ONLINE_BACKGROUND_WINTER]=ONLINE_BACKGROUND_CUSTOM,
+        [ONLINE_BACKGROUND_CUSTOM]=ONLINE_BACKGROUND_OFF,
+        [ONLINE_BACKGROUND_OFF]=ONLINE_BACKGROUND_DAY,
+    };
+    online_background_t choice=next[online_background_normalize(current)];
+    return choice==ONLINE_BACKGROUND_CUSTOM && !has_custom?ONLINE_BACKGROUND_OFF:choice;
 }
 static const unsigned volume_steps[]={0,25,50,75,90,100};
 unsigned online_volume_next(unsigned current) {
@@ -237,7 +244,7 @@ bool online_standby_busy(online_phase_t phase,unsigned mode,bool reply_pending,
         reply_pending || host_busy || capturing || feedback_pending;
 }
 online_theme_t online_theme_next(online_theme_t theme) {
-    return theme==ONLINE_THEME_WHALE?ONLINE_THEME_MINT:ONLINE_THEME_WHALE;
+    return (online_theme_t)((online_theme_normalize(theme)+1)%ONLINE_THEME_COUNT);
 }
 online_avatar_t online_avatar_frame(online_phase_t phase,bool mic,unsigned level,uint64_t now_ms) {
     if(phase==ONLINE_ERROR)return ONLINE_AVATAR_ERROR;

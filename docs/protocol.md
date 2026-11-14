@@ -78,16 +78,19 @@ These HTTP routes exist only in the device's provisioning hotspot and are
 independent of the DSH audio protocol:
 
 - `GET /appearance` opens background selection/upload. `GET /current` adds
-  `background` (0 = Seaside Tea, 1 = Moonlit Dream, 2 = custom, 3 = off) and
+  `background` (0 = Seaside Tea, 1 = Moonlit Dream, 2 = custom, 3 = off,
+  4 = Spring Sakura, 5 = Summer Shore, 6 = Autumn Maple, 7 = Winter Snow) and
   `customBackground` (a usable custom image is present).
+- `GET /background-season.bmp?id=4` serves the Spring Sakura preview as an
+  indexed BMP. IDs 5–7 select the other seasons.
 - `POST /background/upload` requires the current `X-Setup-Nonce` and exactly
   6,184 binary bytes. WTBG v1 starts with `57 54 42 47 01 60 80 10`, followed
   by sixteen RGB565LE palette entries and 6,144 I4 pixel bytes, high nibble
   first. Dimensions are fixed at 96×128. Invalid length/version/header,
   interrupted uploads and storage errors never trigger a reboot or erase
   connection settings. NVS stores the bounded blob under `dsh_voice/bg_custom`.
-- `POST /background/apply` requires the same nonce and JSON
-  `{"background":0|1|2|3}`. Custom selection requires a usable or newly uploaded
+- `POST /background/apply` requires the same nonce and a JSON object with
+  an integer `background` from 0 through 7. Custom selection requires a usable or newly uploaded
   image. A successful preference save schedules a reboot; saved Wi-Fi,
   pairing, endpoint and device identity are reused. No active credentials
   are required in this request.

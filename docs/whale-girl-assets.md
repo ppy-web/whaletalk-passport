@@ -1,7 +1,8 @@
-# 鲸语双界面素材
+# 鲸语角色与背景素材
 
-设备内应用名为「鲸语」，仓库名保持 WhaleTalk Passport。默认鲸鱼娘，另一套为原薄荷表情。
-设置第一项按 OK 切换，长按 OK 返回；外观选择单独保存，不重写连接配置。
+设备内应用名为「鲸语」，仓库名保持 WhaleTalk Passport。默认鲸鱼娘。
+长按 OK，进入「系统设置 → 界面」后短按 OK，按鲸鱼娘、薄荷表情、鲸鱼娘2、Claude 的顺序切换。
+长按 OK 返回首页。外观选择使用原有的 `dsh_voice/theme`，兼容已保存的旧选项，不重写连接配置。
 
 ## 文件与来源
 
@@ -11,12 +12,19 @@
 - `assets/characters/whale-girl-transparent-atlas.png`：与当前图集相同的 RGBA 数据，也是编译脚本使用的输入。
 - `assets/characters/whale-girl-front-atlas-v2-alpha.png`：2026-11-05 使用内置 `imagegen` 编辑的最终双侧耳机、腰部延展与渐隐原图；[完整编辑记录与提示词](../assets/characters/generation.json)。
 - `assets/characters/history/`：旧版正面图集及未采用的中间稿，仅作素材来源记录，不参与构建；原始侧身参考图保留在原路径。
-- `assets/characters/whale_avatar.c`：每帧 256 项 RGB565/A8 调色板及 I8 像素索引，六帧合计 415,008 字节，存放于 Flash。
+- [鲸鱼娘2 图集](../assets/characters/whale-maid-atlas.png)及 [Claude 图集](../assets/characters/claude-atlas.png)：
+  2026-11-14 用内置 imagegen 分别基于用户的 `鲸鱼娘2.jpg` 和 `Claude.jpg` 生成。
+  每套保持同一角色构图，按待机、聆听、思考、说话、眨眼、错误排列。完整提示词及参考图哈希见
+  [角色生成记录](../assets/characters/generation.json)。
+- `assets/characters/*_avatar.c`：三套图集生成的 Flash 数据，每套六帧；源 PNG 不打包进固件。
 - `assets/backgrounds/*-source.png`：2026-11-05 内置 `imagegen` 生成的「晴海茶室」「星夜鲸梦」高清原图。
 - `assets/backgrounds/seaside-tea.png`、`moonlit-dream.png`：240×320 PNG，供配置网页预览。
-- `assets/backgrounds/whale_backgrounds.c`：两幅 240×320 RGB565，合计 307,200 字节，直接从 Flash 绘制。
+- `assets/backgrounds/whale_backgrounds.c`：晴海、星夜使用 240×320 RGB565（共 307,200 字节）。
+  四季预置图从示例 PNG 转成 120×160、256 色 BMP（共 81,112 字节），手机预览与设备共用这份 Flash 数据。
+  设备从每行的像素索引生成 RGB565，与自定义背景共用 480 字节行缓冲。
 - [生成记录与提示词](../assets/backgrounds/generation.json)：两套背景及透明图集的生成工具、输入输出和完整提示词。
-- `assets/backgrounds/examples/`：8 张可下载上传的 240×320 示例背景，不参与固件构建；见[预览、下载与上传说明](background-examples.md)及[独立生成记录](../assets/backgrounds/examples/generation.json)。
+- `assets/backgrounds/examples/`：8 张可下载上传的 240×320 示例背景，四季图也是预置图的原始素材。
+  见[预览、下载与上传说明](background-examples.md)及[独立生成记录](../assets/backgrounds/examples/generation.json)。
 
 生成图并非 FoloToy SDK 自带的角色资产。项目保留参考图和提示词以便后续一致地制作素材；原 SDK、字体与参考代码来源仍见根目录 NOTICE。
 
@@ -34,12 +42,12 @@ python tools/render_preview.py
 转换仅做规则分格、定尺、裁剪和像素编码，角色绘制由内置生成工具完成。每个高清方形帧
 先采样为 280×280，置于屏幕坐标 (-20, 38)，在 35 像素状态栏下输出
 240×285 的原生绘制区域。头顶呆毛完整露出，脸部位于屏幕中部，腰部渐隐延伸到下方按钮后面；状态图标移至顶部。
-运行时专用 LVGL 解码器读取 Flash 调色板和索引，每行输出 RGB565/A8，只使用 720 字节
+每帧使用 256 项 RGB565/A8 调色板。I8 索引按行进行无损游程编码，密集行保留原索引；
+行偏移表让 LVGL 可直接读取需要的行。三套立绘各用约 244、241、251 KiB Flash。
+运行时三套立绘共用专用 LVGL 解码器，每行输出 RGB565/A8，只使用 720 字节
 像素缓存及对齐空间。不在设备上解压 PNG、缩放图片或分配完整图像缓冲，也不启用整屏离屏
 透明图层。思考时按 3.2 秒循环有限帧，说话时有限频率切换嘴型。
-六帧保持同样的头部、耳机及腰部定位，全部正面面向屏幕；淡出已经编码在各帧 A8 平面中，
-能直接叠在两套内置背景和用户自定义背景上。放大后的六帧合计 415,008 字节，比原来的
-192×192 RGB565/A8 六帧减少 248,544 字节。
+每套六帧保持相同人物与构图。底部的透明渐隐编码在各帧中，可直接叠在六套内置背景或用户自定义背景上。
 自定义图由网页压缩为 WTBG v1：8 字节头、16 项 RGB565LE 调色板（32 字节）、
 96×128 的 I4 像素（6,144 字节），高半字节在前，总长 6,184 字节。设备验证后存入 NVS
 的 `bg_custom`，背景选择为 `background`；均保留在 `dsh_voice` 内。读取失败不擦除配置。

@@ -3,6 +3,7 @@
 #include "online_profiles.h"
 #include "online_onboarding.h"
 #include "online_background.h"
+#include "whale_backgrounds.h"
 #include "esp_http_server.h"
 #include "esp_wifi.h"
 #include "esp_random.h"
@@ -90,6 +91,16 @@ static esp_err_t background_preview(httpd_req_t *r) {
     const unsigned char *start=night?night_png_start:day_png_start,*end=night?night_png_end:day_png_end;
     httpd_resp_set_type(r,"image/png");return httpd_resp_send(r,(const char *)start,end-start);
 }
+static esp_err_t seasonal_preview(httpd_req_t *r) {
+    char query[24],value[2];
+    if(httpd_req_get_url_query_str(r,query,sizeof(query))!=ESP_OK ||
+       httpd_query_key_value(query,"id",value,sizeof(value))!=ESP_OK ||
+       value[0]<'0'+ONLINE_BACKGROUND_SPRING || value[0]>'0'+ONLINE_BACKGROUND_WINTER)
+        return httpd_resp_send_err(r,HTTPD_404_NOT_FOUND,"背景不存在");
+    const lv_image_dsc_t *image=whale_backgrounds[value[0]-'0'];
+    httpd_resp_set_type(r,"image/bmp");
+    return httpd_resp_send(r,(const char *)image->data,image->data_size);
+}
 static esp_err_t background_upload(httpd_req_t *r) {
     if(!setup_authorized(r))return httpd_resp_send_err(r,HTTPD_403_FORBIDDEN,"请重新打开配置页");
     if(saved || r->content_len!=ONLINE_BG_BYTES)return httpd_resp_send_err(r,HTTPD_400_BAD_REQUEST,"背景格式或大小无效");
@@ -120,7 +131,7 @@ static esp_err_t background_apply(httpd_req_t *r) {
     }
     body[used]=0;cJSON *json=cJSON_ParseWithOpts(body,NULL,true),*value=cJSON_GetObjectItemCaseSensitive(json,"background");
     int choice=cJSON_IsNumber(value)?value->valueint:-1;
-    bool valid=cJSON_IsNumber(value) && value->valuedouble==choice && choice>=0 && choice<=ONLINE_BACKGROUND_OFF &&
+    bool valid=cJSON_IsNumber(value) && value->valuedouble==choice && choice>=0 && choice<ONLINE_BACKGROUND_COUNT &&
         (choice!=ONLINE_BACKGROUND_CUSTOM || uploaded_background || online_background_custom_available());
     cJSON_Delete(json);
     if(!valid)return httpd_resp_send_err(r,HTTPD_400_BAD_REQUEST,"请先上传自定义背景或选择其他选项");
@@ -227,6 +238,7 @@ esp_err_t online_start_setup(char *description,size_t size) {
         {.uri="/background-image.js",.method=HTTP_GET,.handler=background_js},
         {.uri="/background-day.png",.method=HTTP_GET,.handler=background_preview},
         {.uri="/background-night.png",.method=HTTP_GET,.handler=background_preview},
+        {.uri="/background-season.bmp",.method=HTTP_GET,.handler=seasonal_preview},
         {.uri="/background/upload",.method=HTTP_POST,.handler=background_upload},
         {.uri="/background/apply",.method=HTTP_POST,.handler=background_apply},
     };

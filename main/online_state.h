@@ -5,10 +5,19 @@
 #include <stdatomic.h>
 typedef enum { ONLINE_SETUP, ONLINE_CONNECTING, ONLINE_READY, ONLINE_LISTENING,
     ONLINE_THINKING, ONLINE_SPEAKING, ONLINE_ERROR } online_phase_t;
-typedef enum { ONLINE_THEME_WHALE, ONLINE_THEME_MINT } online_theme_t;
+/* Stored as dsh_voice/theme; keep the original values when adding options. */
+typedef enum {
+    ONLINE_THEME_WHALE=0, ONLINE_THEME_MINT=1, ONLINE_THEME_WHALE_MAID=2, ONLINE_THEME_CLAUDE=3,
+    ONLINE_THEME_COUNT
+} online_theme_t;
 online_theme_t online_theme_normalize(unsigned stored);
 online_theme_t online_theme_next(online_theme_t theme);
-typedef enum { ONLINE_BACKGROUND_DAY, ONLINE_BACKGROUND_NIGHT, ONLINE_BACKGROUND_CUSTOM, ONLINE_BACKGROUND_OFF } online_background_t;
+/* Persisted in dsh_voice/background and used by the local settings portal. */
+typedef enum {
+    ONLINE_BACKGROUND_DAY=0, ONLINE_BACKGROUND_NIGHT=1, ONLINE_BACKGROUND_CUSTOM=2, ONLINE_BACKGROUND_OFF=3,
+    ONLINE_BACKGROUND_SPRING=4, ONLINE_BACKGROUND_SUMMER=5, ONLINE_BACKGROUND_AUTUMN=6, ONLINE_BACKGROUND_WINTER=7,
+    ONLINE_BACKGROUND_COUNT
+} online_background_t;
 online_background_t online_background_normalize(unsigned stored);
 online_background_t online_background_next(online_background_t current,bool has_custom);
 typedef enum { ONLINE_AVATAR_IDLE, ONLINE_AVATAR_LISTENING, ONLINE_AVATAR_THINKING,
