@@ -15,6 +15,8 @@ typedef enum { ONLINE_AVATAR_IDLE, ONLINE_AVATAR_LISTENING, ONLINE_AVATAR_THINKI
     ONLINE_AVATAR_SPEAKING, ONLINE_AVATAR_BLINK, ONLINE_AVATAR_ERROR, ONLINE_AVATAR_COUNT } online_avatar_t;
 online_avatar_t online_avatar_frame(online_phase_t phase,bool mic,unsigned level,uint64_t now_ms);
 unsigned online_volume_next(unsigned current);
+unsigned online_volume_normalize(unsigned stored);
+#define ONLINE_VOLUME_DEFAULT 75
 unsigned online_brightness_normalize(unsigned stored);
 unsigned online_brightness_next(unsigned current);
 
@@ -57,15 +59,29 @@ const char *online_connection_error(int http_status,int socket_error,bool has_ip
 bool online_endpoint_from_ip(const char *ip,char *out,size_t size);
 bool online_endpoint_from_ip_port(const char *ip,unsigned port,char *out,size_t size);
 
-typedef enum { ONLINE_HOME, ONLINE_SETTINGS, ONLINE_DISPLAY, ONLINE_CONNECTION, ONLINE_CONFIRM } online_page_t;
-typedef enum { ONLINE_KEY_OK=1, ONLINE_KEY_UP, ONLINE_KEY_DOWN, ONLINE_KEY_LONG, ONLINE_KEY_UP_LONG } online_key_t;
+typedef enum { ONLINE_HOME, ONLINE_SETTINGS, ONLINE_DISPLAY, ONLINE_STATUS, ONLINE_SOUND, ONLINE_CONNECTION } online_page_t;
+typedef enum {
+    ONLINE_KEY_OK=1, ONLINE_KEY_UP, ONLINE_KEY_DOWN, ONLINE_KEY_LONG,
+    ONLINE_KEY_UP_LONG, ONLINE_KEY_DOWN_LONG
+} online_key_t;
 typedef enum { ONLINE_ACTION_NONE, ONLINE_ACTION_MIC, ONLINE_ACTION_VOLUME,
     ONLINE_ACTION_CANCEL, ONLINE_ACTION_SETUP, ONLINE_ACTION_THEME, ONLINE_ACTION_IDLE,
-    ONLINE_ACTION_BACKGROUND, ONLINE_ACTION_BRIGHTNESS, ONLINE_ACTION_OVERLAY, ONLINE_ACTION_CUE } online_action_t;
-typedef enum { ONLINE_MENU_DISPLAY, ONLINE_MENU_CONNECTION, ONLINE_MENU_UPLOAD, ONLINE_MENU_HOME, ONLINE_MENU_SETUP, ONLINE_MENU_COUNT } online_menu_item_t;
+    ONLINE_ACTION_BACKGROUND, ONLINE_ACTION_BRIGHTNESS, ONLINE_ACTION_OVERLAY,
+    ONLINE_ACTION_CUE, ONLINE_ACTION_NETWORK, ONLINE_ACTION_RESUME } online_action_t;
+typedef enum {
+    ONLINE_MENU_DISPLAY, ONLINE_MENU_STATUS, ONLINE_MENU_SOUND,
+    ONLINE_MENU_UPLOAD, ONLINE_MENU_HOME, ONLINE_MENU_CONNECTION, ONLINE_MENU_COUNT
+} online_menu_item_t;
+enum { ONLINE_MENU_COLUMNS=2 };
 typedef enum { ONLINE_DISPLAY_THEME, ONLINE_DISPLAY_BACKGROUND, ONLINE_DISPLAY_BRIGHTNESS, ONLINE_DISPLAY_IDLE,
-    ONLINE_DISPLAY_OVERLAY, ONLINE_DISPLAY_CUE, ONLINE_DISPLAY_BACK, ONLINE_DISPLAY_COUNT } online_display_item_t;
-typedef struct { online_page_t page; unsigned selected; } online_menu_t;
+    ONLINE_DISPLAY_OVERLAY, ONLINE_DISPLAY_BACK, ONLINE_DISPLAY_COUNT } online_display_item_t;
+typedef enum { ONLINE_SOUND_VOLUME, ONLINE_SOUND_CUE, ONLINE_SOUND_BACK, ONLINE_SOUND_COUNT } online_sound_item_t;
+typedef struct {
+    online_page_t page;
+    unsigned selected,network_count;
+    bool provisioning;
+} online_menu_t;
+unsigned online_menu_items(const online_menu_t *menu);
 online_action_t online_menu_key(online_menu_t *menu,online_key_t key);
 
 /* Start once roughly 300 ms is queued, or after a bounded short-answer wait. */

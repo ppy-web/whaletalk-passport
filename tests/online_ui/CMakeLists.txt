@@ -6,7 +6,7 @@ set(CONFIG_LV_BUILD_DEMOS OFF CACHE BOOL "" FORCE)
 set(CONFIG_LV_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(CONFIG_LV_USE_THORVG_INTERNAL OFF CACHE BOOL "" FORCE)
 add_subdirectory("${REPO_ROOT}/managed_components/lvgl__lvgl" lvgl)
-add_executable(preview preview.c "${REPO_ROOT}/main/online_state.c" "${REPO_ROOT}/main/online_background_image.c"
+add_executable(preview preview.c "${REPO_ROOT}/main/online_state.c" "${REPO_ROOT}/main/online_onboarding.c" "${REPO_ROOT}/main/online_background_image.c"
     "${REPO_ROOT}/main/online_background_format.c"
     "${REPO_ROOT}/main/whale_avatar_view.c"
     "${REPO_ROOT}/assets/characters/whale_avatar.c"

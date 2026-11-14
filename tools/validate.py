@@ -62,6 +62,14 @@ def host_tests():
     run(*command, '-std=c11', '-Wall', '-Wextra', '-Werror', '-Itests/setup_stubs', '-Imain',
         'tests/test_online_setup_scan.c', 'main/online_setup_scan.c', '-o', scan_test)
     run(scan_test)
+    profiles_test = build / ('profiles-test.exe' if os.name == 'nt' else 'profiles-test')
+    run(*command, '-std=c11', '-Wall', '-Wextra', '-Werror', '-Itests/theme_stubs', '-Imain',
+        'tests/test_online_profiles.c', 'main/online_profiles.c', 'main/online_state.c', '-o', profiles_test)
+    run(profiles_test)
+    onboarding_test = build / ('onboarding-test.exe' if os.name == 'nt' else 'onboarding-test')
+    run(*command, '-std=c11', '-Wall', '-Wextra', '-Werror', '-Imain',
+        'tests/test_online_onboarding.c', 'main/online_onboarding.c', '-o', onboarding_test)
+    run(onboarding_test)
     print('Host tests: PASS', flush=True)
 
 
@@ -72,7 +80,11 @@ def firmware():
         raise RuntimeError(f'Expected ESP-IDF v5.5.3, got {version.strip()}')
     build = ROOT / 'build/firmware-build'
     config = build / 'sdkconfig'
-    common = [sys.executable, idf, '-B', build, '-D', f'SDKCONFIG={config}']
+    # This is generated gate configuration, not the user's root sdkconfig.
+    # Reusing it would override newly maintained defaults (for example QR support).
+    config.unlink(missing_ok=True)
+    common = [sys.executable, idf, '-B', build, '-D', f'SDKCONFIG={config}',
+              '-D', f'SDKCONFIG_DEFAULTS={ROOT / "sdkconfig.defaults"}']
     run(*common, 'reconfigure', 'build')
     image = build / 'WhaleTalk-Passport-full.bin'
     run(*common, 'merge-bin', '-o', image)

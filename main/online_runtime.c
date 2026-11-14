@@ -49,9 +49,13 @@ static online_ptt_control_t ptt;
 #define ptt_capture_stopped ptt.capture_stopped
 #define ptt_audio_started ptt.audio_started
 static portMUX_TYPE state_lock=portMUX_INITIALIZER_UNLOCKED;
-static online_status_t status={.phase=ONLINE_CONNECTING,.volume=75};
-static atomic_bool mic,ready,connected,got_ip,hello_pending,cancel_pending,setup_pending,volume_pending,fault;
-static atomic_uint epoch,level,volume=75,capture_drops;
+static online_status_t status={.phase=ONLINE_CONNECTING};
+static atomic_bool mic,ready,connected,got_ip,hello_pending,cancel_pending,setup_pending,fault;
+static atomic_uint epoch,level,volume=ONLINE_VOLUME_DEFAULT,capture_drops;
+static atomic_uint volume_revision;
+static atomic_bool volume_save_failed;
+static atomic_uint profile_pending;
+static atomic_bool profile_save_failed;
 static atomic_uint selected_theme=ONLINE_THEME_WHALE,theme_revision;
 static atomic_bool theme_save_failed;
 static atomic_bool theme_storage_available;
@@ -158,6 +162,7 @@ void online_snapshot(online_status_t *out) {
     }
     out->mic=atomic_load(&mic);out->volume=atomic_load(&volume);out->level=atomic_load(&level);
     out->linked=atomic_load(&connected) && atomic_load(&ready);
+    out->has_ip=atomic_load(&got_ip);
     out->audio_ok=audio_available;
     out->theme=online_theme_normalize(atomic_load(&selected_theme));out->theme_save_failed=atomic_load(&theme_save_failed);
     out->idle=online_idle_normalize(atomic_load(&selected_idle));out->idle_save_failed=atomic_load(&idle_save_failed);
@@ -168,6 +173,8 @@ void online_snapshot(online_status_t *out) {
     out->brightness_save_failed=atomic_load(&brightness_save_failed);
     out->overlay=atomic_load(&overlay);out->overlay_save_failed=atomic_load(&overlay_save_failed);
     out->cues=atomic_load(&cues_enabled);out->cues_save_failed=atomic_load(&cues_save_failed);
+    out->volume_save_failed=atomic_load(&volume_save_failed);
+    out->profile_save_failed=atomic_load(&profile_save_failed);
 }
 void online_toggle_mic(void) { if(audio_available) {bool next=!atomic_load(&mic);atomic_store(&mic,next);atomic_fetch_add(&epoch,1);if(!next)online_cancel();cue_request(next?CUE_MIC_ON:CUE_MIC_OFF);} }
 void online_cancel(void) {
@@ -200,8 +207,22 @@ void online_ptt_release(void) {
 void online_ptt_abort(void) {
     if(atomic_exchange(&ptt_mode,PTT_IDLE)!=PTT_IDLE)online_cancel();
 }
-void online_volume(void) { atomic_store(&volume_pending,true); }
+void online_volume(void) {
+    unsigned current=atomic_load(&volume);
+    while(!atomic_compare_exchange_weak(&volume,&current,online_volume_next(current))) {}
+    atomic_store(&volume_save_failed,!atomic_load(&theme_storage_available));
+    atomic_fetch_add(&volume_revision,1);
+    cue_request(CUE_VOLUME);
+}
 void online_setup(void) { atomic_store(&setup_pending,true); }
+void online_select_profile(unsigned index) {
+    if(index>=ONLINE_PROFILE_LIMIT)return;
+    if(!atomic_load(&theme_storage_available)) {atomic_store(&profile_save_failed,true);return;}
+    atomic_store(&profile_save_failed,false);
+    unsigned expected=0;
+    atomic_compare_exchange_strong(&profile_pending,&expected,index+1);
+    TaskHandle_t task=atomic_load(&maintenance_worker);if(task)xTaskNotifyGive(task);
+}
 void online_cycle_theme(void) {
     unsigned current=atomic_load(&selected_theme);
     while(!atomic_compare_exchange_weak(&selected_theme,&current,online_theme_next(online_theme_normalize(current)))) {}
@@ -262,13 +283,22 @@ static void display_standby_step(bool *suspended) {
 }
 static void theme_task(void *arg) {
     (void)arg;unsigned saved_revision=0,saved_idle_revision=0,saved_background_revision=0,saved_brightness_revision=0,saved_overlay_revision=0,saved_cues_revision=0;
+    unsigned saved_volume_revision=0;
     atomic_store(&maintenance_worker,xTaskGetCurrentTaskHandle());
     bool display_suspended=false;
     for(;;) {
         display_standby_step(&display_suspended);
+        online_status_t snapshot;online_snapshot(&snapshot);
+        unsigned profile=atomic_exchange(&profile_pending,0);
+        if(profile) {
+            /* This worker also survives provisioning mode. No Wi-Fi/HTTP/LVGL
+             * call runs in the button callback. Select by the displayed SSID
+             * in case a portal save has reordered the stored profiles. */
+            if(profile<=snapshot.profile_count && online_profile_select(snapshot.profile_ssids[profile-1]))esp_restart();
+            atomic_store(&profile_save_failed,true);
+        }
         unsigned revision=atomic_load(&theme_revision),idle_changed=atomic_load(&idle_revision),
             background_changed=atomic_load(&background_revision),brightness_changed=atomic_load(&brightness_revision);
-        online_status_t snapshot;online_snapshot(&snapshot);
         if(revision!=saved_revision && snapshot.phase!=ONLINE_SPEAKING && snapshot.phase!=ONLINE_THINKING) {
             bool saved=online_theme_save(snapshot.theme);
             atomic_store(&theme_save_failed,!saved);
@@ -305,6 +335,12 @@ static void theme_task(void *arg) {
             bool ok=online_cues_save(snapshot.cues);
             atomic_store(&cues_save_failed,!ok);saved_cues_revision=cues_changed;
             if(!ok)ESP_LOGW("whale_theme","cue preference persistence failed");
+        }
+        unsigned volume_changed=atomic_load(&volume_revision);
+        if(volume_changed!=saved_volume_revision && snapshot.phase!=ONLINE_SPEAKING && snapshot.phase!=ONLINE_THINKING) {
+            bool ok=online_volume_save(atomic_load(&volume));
+            atomic_store(&volume_save_failed,!ok);saved_volume_revision=volume_changed;
+            if(!ok)ESP_LOGW("whale_theme","volume preference persistence failed");
         }
         ulTaskNotifyTake(pdTRUE,pdMS_TO_TICKS(atomic_load(&standby_requested)?1000:150));
     }
@@ -764,6 +800,7 @@ static void network_task(void *arg) {
     atomic_store(&selected_brightness,online_brightness_load());
     atomic_store(&overlay,online_overlay_load());
     atomic_store(&cues_enabled,online_cues_load());
+    atomic_store(&volume,online_volume_load());
     online_background_init();
     online_background_t background=online_background_load();
     if(background==ONLINE_BACKGROUND_CUSTOM && !online_background_custom_available()) {
@@ -771,6 +808,12 @@ static void network_task(void *arg) {
         ESP_LOGW("whale_theme","custom background unavailable; using built-in background");
     }
     atomic_store(&selected_background,background);
+    char saved_ssids[ONLINE_PROFILE_LIMIT][33];unsigned profile_count=0;
+    bool profiles_ok=online_profiles_summary(saved_ssids,&profile_count);
+    portENTER_CRITICAL(&state_lock);
+    status.profile_count=profile_count;memcpy(status.profile_ssids,saved_ssids,sizeof(saved_ssids));
+    portEXIT_CRITICAL(&state_lock);
+    atomic_store(&profile_save_failed,!profiles_ok);
     bool theme_worker=xTaskCreate(theme_task,"whale_theme",3072,NULL,2,NULL)==pdPASS;
     atomic_store(&theme_storage_available,theme_worker);atomic_store(&theme_save_failed,!theme_worker);
     atomic_store(&idle_save_failed,!theme_worker);
@@ -787,7 +830,7 @@ static void network_task(void *arg) {
     if(!frame){state(ONLINE_ERROR,"内存不足，无法启动");vTaskDelete(NULL);return;}
     state(ONLINE_CONNECTING,"正在连接 Wi-Fi");
     portENTER_CRITICAL(&state_lock);
-    status.configured=true;status.password_set=config.password[0]!=0;status.token_set=config.token[0]!=0;
+    status.configured=true;status.token_set=config.token[0]!=0;
     snprintf(status.ssid,sizeof(status.ssid),"%s",config.ssid);
     const char *host=strstr(config.url,"://");host=host?host+3:config.url;
     size_t host_len=strcspn(host,"/");if(host_len>=sizeof(status.host))host_len=sizeof(status.host)-1;
@@ -830,7 +873,6 @@ static void network_task(void *arg) {
             if(e==ESP_OK){e=nvs_set_u8(n,"setup",1);if(e==ESP_OK)e=nvs_commit(n);nvs_close(n);}
             if(e==ESP_OK)esp_restart();else state(ONLINE_ERROR,"无法进入配置，请重试");
         }
-        if(atomic_exchange(&volume_pending,false)){atomic_store(&volume,online_volume_next(atomic_load(&volume)));cue_request(CUE_VOLUME);}
         wifi_ps_type_t desired_ps=atomic_load(&standby_requested)?WIFI_PS_MIN_MODEM:WIFI_PS_NONE;
         if(applied_ps!=desired_ps) {
             esp_err_t e=esp_wifi_set_ps(desired_ps);

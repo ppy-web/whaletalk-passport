@@ -10,3 +10,5 @@ bool online_overlay_load(void);
 bool online_overlay_save(bool enabled);
 bool online_cues_load(void);
 bool online_cues_save(bool enabled);
+unsigned online_volume_load(void);
+bool online_volume_save(unsigned percent);

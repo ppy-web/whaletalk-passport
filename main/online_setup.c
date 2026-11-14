@@ -1,9 +1,12 @@
 #include "online_setup.h"
 #include "online_setup_scan.h"
+#include "online_profiles.h"
+#include "online_onboarding.h"
 #include "online_background.h"
 #include "esp_http_server.h"
 #include "esp_wifi.h"
 #include "esp_random.h"
+#include "esp_mac.h"
 #include "esp_system.h"
 #include "esp_timer.h"
 #include "esp_log.h"
@@ -16,12 +19,12 @@ static char nonce[33];
 static bool saved;
 static esp_timer_handle_t reboot_timer;
 bool online_load_config(online_config_t *c) {
-    nvs_handle_t n; size_t size=sizeof(*c); memset(c,0,size);
+    nvs_handle_t n;memset(c,0,sizeof(*c));
     if(nvs_open("dsh_voice",NVS_READWRITE,&n)!=ESP_OK) return false;
     uint8_t setup=0; nvs_get_u8(n,"setup",&setup);
     if(setup) { nvs_erase_key(n,"setup"); nvs_commit(n); }
-    esp_err_t e=nvs_get_blob(n,"config",c,&size); nvs_close(n);
-    return !setup && e==ESP_OK && size==sizeof(*c) && online_config_valid(c);
+    nvs_close(n);
+    return !setup && online_profile_current(c);
 }
 static void reboot(void *arg) { (void)arg;esp_restart(); }
 #define NETWORK_LIMIT 32
@@ -63,6 +66,7 @@ extern const unsigned char setup_page_end[] asm("_binary_setup_page_html_end");
 static online_config_t previous;
 static bool has_previous;
 static bool uploaded_background;
+static char hotspot_ssid[33];
 extern const unsigned char appearance_start[] asm("_binary_appearance_page_html_start");
 extern const unsigned char appearance_end[] asm("_binary_appearance_page_html_end");
 extern const unsigned char background_js_start[] asm("_binary_background_image_js_start");
@@ -180,23 +184,21 @@ static esp_err_t save(httpd_req_t *r) {
         field(j,"token",c.token,sizeof(c.token)) && online_config_valid(&c);
     cJSON_Delete(j);memset(body,0,sizeof(body));
     if(!valid) {memset(&c,0,sizeof(c));return httpd_resp_send_err(r,HTTPD_400_BAD_REQUEST,"检查 Wi-Fi、电脑 IP 和 4 位配对码");}
-    nvs_handle_t n;esp_err_t e=nvs_open("dsh_voice",NVS_READWRITE,&n);
-    if(e==ESP_OK) {e=nvs_set_blob(n,"config",&c,sizeof(c));if(e==ESP_OK)e=nvs_commit(n);nvs_close(n);}
+    bool stored=online_profile_save(&c);
     memset(&c,0,sizeof(c));
-    if(e!=ESP_OK) return httpd_resp_send_err(r,HTTPD_500_INTERNAL_SERVER_ERROR,"保存失败，请重试");
+    if(!stored) return httpd_resp_send_err(r,HTTPD_500_INTERNAL_SERVER_ERROR,"保存失败，原配置保留，请重试");
     saved=true;httpd_resp_set_type(r,"text/plain; charset=utf-8");
-    httpd_resp_sendstr(r,"已保存，设备即将重启。请让手机重新连接原来的 Wi-Fi。");
+    httpd_resp_sendstr(r,"已保存，正在重启连接。手机可退出设备热点。");
     esp_timer_start_once(reboot_timer,1500000);return ESP_OK;
 }
 esp_err_t online_start_setup(char *description,size_t size) {
-    nvs_handle_t stored;size_t stored_size=sizeof(previous);
-    if(nvs_open("dsh_voice",NVS_READONLY,&stored)==ESP_OK) {
-        has_previous=nvs_get_blob(stored,"config",&previous,&stored_size)==ESP_OK && stored_size==sizeof(previous) && online_config_valid(&previous);
-        nvs_close(stored);
-    }
+    has_previous=online_profile_current(&previous);
     wifi_config_t ap={0};
     snprintf(nonce,sizeof(nonce),"%08lx%08lx%08lx%08lx",(unsigned long)esp_random(),(unsigned long)esp_random(),(unsigned long)esp_random(),(unsigned long)esp_random());
-    snprintf((char *)ap.ap.ssid,sizeof(ap.ap.ssid),"DSH-Voice-%04lx",(unsigned long)(esp_random()&65535));
+    uint8_t mac[6];esp_err_t mac_result=esp_read_mac(mac,ESP_MAC_WIFI_SOFTAP);
+    if(mac_result!=ESP_OK)return mac_result;
+    online_hotspot_name(mac,hotspot_ssid);
+    memcpy(ap.ap.ssid,hotspot_ssid,strlen(hotspot_ssid));
     ap.ap.ssid_len=strlen((char *)ap.ap.ssid);
     ap.ap.authmode=WIFI_AUTH_OPEN;ap.ap.max_connection=1;ap.ap.channel=1;
     if(!esp_netif_create_default_wifi_sta() || !esp_netif_create_default_wifi_ap()) return ESP_FAIL;

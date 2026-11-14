@@ -1,6 +1,26 @@
 #include "online_theme.h"
 #include "nvs.h"
 
+unsigned online_volume_load(void) {
+    nvs_handle_t handle;
+    uint8_t value=ONLINE_VOLUME_DEFAULT;
+    if(nvs_open("dsh_voice",NVS_READONLY,&handle)==ESP_OK) {
+        if(nvs_get_u8(handle,"volume",&value)!=ESP_OK)value=ONLINE_VOLUME_DEFAULT;
+        nvs_close(handle);
+    }
+    return online_volume_normalize(value);
+}
+
+bool online_volume_save(unsigned percent) {
+    if(percent!=online_volume_normalize(percent))return false;
+    nvs_handle_t handle;
+    if(nvs_open("dsh_voice",NVS_READWRITE,&handle)!=ESP_OK)return false;
+    esp_err_t result=nvs_set_u8(handle,"volume",(uint8_t)percent);
+    if(result==ESP_OK)result=nvs_commit(handle);
+    nvs_close(handle);
+    return result==ESP_OK;
+}
+
 bool online_cues_load(void) {
     nvs_handle_t handle;uint8_t value=1;
     if(nvs_open("dsh_voice",NVS_READONLY,&handle)==ESP_OK) {

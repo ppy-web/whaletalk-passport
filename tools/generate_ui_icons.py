@@ -114,6 +114,57 @@ def volume(level):
     return icon
 
 
+def settings_icons():
+    """Draw the settings symbols on the same grid as the home controls."""
+    icons = {}
+
+    system = Icon(32, 32)
+    for x, y in ((5, 8), (12, 15.5), (19, 9.5)):
+        system.line([(x, 3.5), (x, y-2.5)])
+        system.line([(x, y+2.5), (x, 20.5)])
+        system.rounded_rect((x-2.1, y-1.7, x+2.1, y+1.7), 1.2)
+    icons['system'] = system
+
+    status = Icon(32, 32)
+    status.ellipse((3.4, 3.4, 20.6, 20.6), 1.9)
+    status.ellipse((10.8, 7, 13.2, 9.4))
+    status.line([(12, 12), (12, 17)], 2.2)
+    icons['status'] = status
+
+    sound = Icon(32, 32)
+    speaker(sound)
+    sound.arc((11.5, 12), 5, -48, 48)
+    sound.arc((11.5, 12), 9, -48, 48)
+    icons['sound'] = sound
+
+    history = Icon(32, 32)
+    history.arc((9.7, 17.5), 10.7, -138, -42)
+    history.arc((9.7, 17.5), 6.8, -138, -42)
+    history.arc((9.7, 17.5), 3.1, -138, -42)
+    history.ellipse((8.6, 16.6, 10.8, 18.8))
+    history.draw.ellipse(history.point((11.6, 10.8, 23.3, 22.5)), fill=0)
+    history.ellipse((12.8, 12, 22.1, 21.3), 1.75)
+    history.line([(17.45, 14.2), (17.45, 16.9), (19.1, 17.7)], 1.6)
+    icons['connection'] = history
+
+    upload = Icon(32, 32)
+    upload.rounded_rect((3.1, 6.1, 20.8, 21), 2.6, 1.9)
+    upload.ellipse((6.3, 9.3, 9.4, 12.4))
+    upload.line([(4.2, 18.5), (9.5, 14.8), (12.4, 16.9), (15.6, 14.1), (19.5, 17.2)])
+    upload.draw.rounded_rectangle(upload.point((12.6, 1.2, 23.6, 13.9)), radius=24, fill=0)
+    upload.line([(18.2, 12), (18.2, 3.4)])
+    upload.line([(14.8, 6.9), (18.2, 3.4), (21.6, 6.9)])
+    icons['upload'] = upload
+
+    home = Icon(32, 32)
+    home.line([(2.9, 11.4), (12, 3.7), (21.1, 11.4)])
+    home.line([(5.7, 10.4), (5.7, 20.3), (9.6, 20.3), (9.6, 15.1),
+               (14.4, 15.1), (14.4, 20.3), (18.3, 20.3), (18.3, 10.4)])
+    icons['home'] = home
+
+    return {f'settings_{name}': icon for name, icon in icons.items()}
+
+
 def make_icons():
     icons = {'link_off': link(False), 'link_on': link(True),
              'mic_off': microphone(False), 'mic_on': microphone(True)}
@@ -149,6 +200,7 @@ def make_icons():
     icon = Icon(28, 20)
     speaker(icon, 10.5)
     icons['volume_level'] = icon
+    icons.update(settings_icons())
     return icons
 
 

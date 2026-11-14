@@ -197,10 +197,16 @@ online_background_t online_background_next(online_background_t current,bool has_
     if(current==ONLINE_BACKGROUND_CUSTOM)return ONLINE_BACKGROUND_OFF;
     return ONLINE_BACKGROUND_DAY;
 }
+static const unsigned volume_steps[]={0,25,50,75,90,100};
 unsigned online_volume_next(unsigned current) {
-    static const unsigned steps[]={0,25,50,75,90,100};
-    for(unsigned i=0;i<sizeof(steps)/sizeof(steps[0]);i++)if(steps[i]>current)return steps[i];
+    for(unsigned i=0;i<sizeof(volume_steps)/sizeof(volume_steps[0]);i++)
+        if(volume_steps[i]>current)return volume_steps[i];
     return 0;
+}
+unsigned online_volume_normalize(unsigned stored) {
+    for(unsigned i=0;i<sizeof(volume_steps)/sizeof(volume_steps[0]);i++)
+        if(volume_steps[i]==stored)return stored;
+    return ONLINE_VOLUME_DEFAULT;
 }
 unsigned online_brightness_normalize(unsigned stored) {
     return stored==25 || stored==50 || stored==75 || stored==100?stored:100;
@@ -247,41 +253,90 @@ online_avatar_t online_avatar_frame(online_phase_t phase,bool mic,unsigned level
     return now_ms%4500<120?ONLINE_AVATAR_BLINK:ONLINE_AVATAR_IDLE;
 }
 
+unsigned online_menu_items(const online_menu_t *menu) {
+    switch(menu->page) {
+        case ONLINE_SETTINGS: return ONLINE_MENU_COUNT;
+        case ONLINE_DISPLAY: return ONLINE_DISPLAY_COUNT;
+        case ONLINE_SOUND: return ONLINE_SOUND_COUNT;
+        case ONLINE_CONNECTION: return menu->network_count+2;
+        default: return 0;
+    }
+}
+
+static online_action_t resume_network(const online_menu_t *menu) {
+    return menu->provisioning && menu->network_count?ONLINE_ACTION_RESUME:ONLINE_ACTION_NONE;
+}
+static online_action_t return_home(online_menu_t *menu) {
+    menu->page=ONLINE_HOME;
+    menu->selected=0;
+    return resume_network(menu);
+}
+
 online_action_t online_menu_key(online_menu_t *m,online_key_t key) {
-    if(key==ONLINE_KEY_UP_LONG)return ONLINE_ACTION_OVERLAY;
+    if(key==ONLINE_KEY_UP_LONG || key==ONLINE_KEY_DOWN_LONG) {
+        if(m->page==ONLINE_SETTINGS) {
+            unsigned offset=key==ONLINE_KEY_DOWN_LONG?ONLINE_MENU_COLUMNS:ONLINE_MENU_COUNT-ONLINE_MENU_COLUMNS;
+            m->selected=(m->selected+offset)%ONLINE_MENU_COUNT;
+            return ONLINE_ACTION_NONE;
+        }
+        return key==ONLINE_KEY_UP_LONG?ONLINE_ACTION_OVERLAY:ONLINE_ACTION_NONE;
+    }
     if(key==ONLINE_KEY_LONG) {
-        m->page=m->page==ONLINE_HOME?ONLINE_SETTINGS:ONLINE_HOME;m->selected=0;
+        if(m->page!=ONLINE_HOME)return return_home(m);
+        m->page=ONLINE_SETTINGS;m->selected=0;
         return ONLINE_ACTION_NONE;
     }
     if(m->page==ONLINE_HOME) {
-        if(key==ONLINE_KEY_OK)return ONLINE_ACTION_MIC;
+        if(key==ONLINE_KEY_OK)return m->provisioning?resume_network(m):ONLINE_ACTION_MIC;
         if(key==ONLINE_KEY_UP)return ONLINE_ACTION_VOLUME;
         if(key==ONLINE_KEY_DOWN)return ONLINE_ACTION_CANCEL;
-    } else if(m->page==ONLINE_CONNECTION) {
-        if(key==ONLINE_KEY_OK) {m->page=ONLINE_SETTINGS;m->selected=ONLINE_MENU_CONNECTION;}
-    } else if(key==ONLINE_KEY_UP || key==ONLINE_KEY_DOWN) {
-        unsigned count=m->page==ONLINE_SETTINGS?ONLINE_MENU_COUNT:m->page==ONLINE_DISPLAY?ONLINE_DISPLAY_COUNT:2;
-        m->selected=(m->selected+(key==ONLINE_KEY_DOWN?1:count-1))%count;
+        return ONLINE_ACTION_NONE;
     }
-    else if(key==ONLINE_KEY_OK) {
-        if(m->page==ONLINE_SETTINGS) {
-            if(m->selected==ONLINE_MENU_DISPLAY) {m->page=ONLINE_DISPLAY;m->selected=0;return ONLINE_ACTION_NONE;}
-            if(m->selected==ONLINE_MENU_CONNECTION) {m->page=ONLINE_CONNECTION;m->selected=0;return ONLINE_ACTION_NONE;}
-            if(m->selected==ONLINE_MENU_UPLOAD) {
-                m->page=ONLINE_HOME;m->selected=0;return ONLINE_ACTION_SETUP;
-            }
-            m->page=m->selected==ONLINE_MENU_SETUP?ONLINE_CONFIRM:ONLINE_HOME;m->selected=0;
-        } else if(m->page==ONLINE_DISPLAY) {
+    unsigned count=online_menu_items(m);
+    if(count && (key==ONLINE_KEY_UP || key==ONLINE_KEY_DOWN)) {
+        m->selected=(m->selected+(key==ONLINE_KEY_DOWN?1:count-1))%count;
+        return ONLINE_ACTION_NONE;
+    }
+    if(key!=ONLINE_KEY_OK)return ONLINE_ACTION_NONE;
+    switch(m->page) {
+        case ONLINE_SETTINGS: {
+            static const online_page_t pages[]={
+                [ONLINE_MENU_DISPLAY]=ONLINE_DISPLAY,[ONLINE_MENU_STATUS]=ONLINE_STATUS,
+                [ONLINE_MENU_SOUND]=ONLINE_SOUND,[ONLINE_MENU_UPLOAD]=ONLINE_HOME,
+                [ONLINE_MENU_HOME]=ONLINE_HOME,[ONLINE_MENU_CONNECTION]=ONLINE_CONNECTION,
+            };
+            if(m->selected>=ONLINE_MENU_COUNT)break;
+            if(m->selected==ONLINE_MENU_HOME)return return_home(m);
+            bool setup=m->selected==ONLINE_MENU_UPLOAD;
+            m->page=pages[m->selected];
+            m->selected=0;
+            return setup?ONLINE_ACTION_SETUP:ONLINE_ACTION_NONE;
+        }
+        case ONLINE_DISPLAY:
             if(m->selected==ONLINE_DISPLAY_THEME)return ONLINE_ACTION_THEME;
             if(m->selected==ONLINE_DISPLAY_BACKGROUND)return ONLINE_ACTION_BACKGROUND;
             if(m->selected==ONLINE_DISPLAY_BRIGHTNESS)return ONLINE_ACTION_BRIGHTNESS;
             if(m->selected==ONLINE_DISPLAY_IDLE)return ONLINE_ACTION_IDLE;
             if(m->selected==ONLINE_DISPLAY_OVERLAY)return ONLINE_ACTION_OVERLAY;
-            if(m->selected==ONLINE_DISPLAY_CUE)return ONLINE_ACTION_CUE;
             m->page=ONLINE_SETTINGS;m->selected=ONLINE_MENU_DISPLAY;
-        } else if(m->selected) {
-            m->page=ONLINE_HOME;m->selected=0;return ONLINE_ACTION_SETUP;
-        } else {m->page=ONLINE_SETTINGS;m->selected=ONLINE_MENU_SETUP;}
+            break;
+        case ONLINE_STATUS:
+            m->page=ONLINE_SETTINGS;m->selected=ONLINE_MENU_STATUS;
+            break;
+        case ONLINE_SOUND:
+            if(m->selected==ONLINE_SOUND_VOLUME)return ONLINE_ACTION_VOLUME;
+            if(m->selected==ONLINE_SOUND_CUE)return ONLINE_ACTION_CUE;
+            m->page=ONLINE_SETTINGS;m->selected=ONLINE_MENU_SOUND;
+            break;
+        case ONLINE_CONNECTION:
+            if(m->selected<m->network_count)return m->selected?ONLINE_ACTION_NETWORK:resume_network(m);
+            if(m->selected==m->network_count) {
+                m->page=ONLINE_HOME;m->selected=0;
+                return ONLINE_ACTION_SETUP;
+            }
+            m->page=ONLINE_SETTINGS;m->selected=ONLINE_MENU_CONNECTION;
+            break;
+        default: break;
     }
     return ONLINE_ACTION_NONE;
 }

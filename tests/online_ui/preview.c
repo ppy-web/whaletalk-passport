@@ -11,6 +11,7 @@ static int battery_value=87;
 static unsigned toggles,cancels,volumes,setups,themes;
 static unsigned ptt_presses,ptt_starts,ptt_releases;
 static unsigned idle_changes,brightness_changes;
+static unsigned network_switches,selected_network;
 static bool standby;
 static unsigned standby_entries,wake_requests;
 bool online_set_standby(bool asleep) {
@@ -30,8 +31,9 @@ int bsp_battery_soc(void){return battery_value;}
 void online_snapshot(online_status_t *s){*s=fixture;}
 void online_toggle_mic(void){toggles++;}
 void online_cancel(void){cancels++;}
-void online_volume(void){volumes++;}
+void online_volume(void){fixture.volume=online_volume_next(fixture.volume);volumes++;}
 void online_setup(void){setups++;}
+void online_select_profile(unsigned index){network_switches++;selected_network=index;}
 void online_cycle_theme(void){fixture.theme=online_theme_next(fixture.theme);themes++;}
 void online_cycle_idle(void){fixture.idle=online_idle_next(fixture.idle);idle_changes++;}
 void online_cycle_brightness(void){fixture.brightness=online_brightness_next(fixture.brightness);brightness_changes++;}
@@ -171,8 +173,8 @@ int main(void) {
         assert(!strcmp(lv_label_get_text(title),connections[i]));
     }
     fixture.phase=ONLINE_READY;fixture.linked=true;fixture.mic=false;refresh(NULL);
-    assert(strstr(lv_label_get_text(title),"Wi-Fi") && strstr(lv_label_get_text(title),"后端"));
-    fixture.mic=true;refresh(NULL);assert(strstr(lv_label_get_text(title),"麦克风"));
+    assert(!*lv_label_get_text(title) && link_icon.value);
+    fixture.mic=true;refresh(NULL);assert(!*lv_label_get_text(title) && action_mic.value);
     fixture.linked=false;refresh(NULL);assert(strstr(lv_label_get_text(title),"后端"));
     fixture.theme=ONLINE_THEME_WHALE;fixture.phase=ONLINE_LISTENING;fixture.mic=true;fixture.linked=true;fixture.feedback_visible=true;
     snprintf(fixture.message,sizeof(fixture.message),"%s",online_error_text("passport-no-speech"));refresh(NULL);snap("recognition-error");
@@ -194,7 +196,7 @@ int main(void) {
     fixture.feedback_visible=false;
     assert(online_feedback_result(&progress_state,"turn","completed",""));
     fixture.progress=progress_state.phase;refresh(NULL);
-    assert(!fixture.progress && strstr(lv_label_get_text(title),"麦克风"));
+    assert(!fixture.progress && !*lv_label_get_text(title) && action_mic.value);
     fixture.phase=ONLINE_THINKING;
     uint32_t thinking_hashes[3]={0};
     for(unsigned i=0;i<32;i++) {
@@ -270,11 +272,11 @@ int main(void) {
     snap("muted");fixture.volume=75;refresh(NULL);snap("volume");
     /* Transport status is independent of the phase and microphone switch. */
     fixture.linked=true;fixture.mic=false;refresh(NULL);
-    assert(link_icon.value && !mic_icon.value && !action_mic.value);
-    uint32_t connected=icon_render_hash(&link_icon),mic_off=icon_render_hash(&mic_icon);
+    assert(link_icon.value && !action_mic.value);
+    uint32_t connected=icon_render_hash(&link_icon),mic_off=icon_render_hash(&action_mic);
     fixture.linked=false;fixture.mic=true;refresh(NULL);
-    assert(!link_icon.value && mic_icon.value && action_mic.value);
-    assert(icon_render_hash(&link_icon)!=connected && icon_render_hash(&mic_icon)!=mic_off);
+    assert(!link_icon.value && action_mic.value);
+    assert(icon_render_hash(&link_icon)!=connected && icon_render_hash(&action_mic)!=mic_off);
     snap("link-lost-mic-on");fixture.mic=false;fixture.linked=true;refresh(NULL);
     const int battery_values[]={-1,0,10,100,150};
     const char *battery_names[]={"battery-unknown","battery-empty","battery-low","battery-full","battery-clamped"};
@@ -289,7 +291,7 @@ int main(void) {
     battery_value=87;update_battery(NULL);
     fixture.audio_ok=false;strcpy(fixture.message,"音频不可用，请检查设备");refresh(NULL);
     assert(!strcmp(lv_label_get_text(title),fixture.message));snap("audio-unavailable");
-    fixture.audio_ok=true;fixture.message[0]=0;refresh(NULL);assert(strstr(lv_label_get_text(title),"已连接"));
+    fixture.audio_ok=true;fixture.message[0]=0;refresh(NULL);assert(!*lv_label_get_text(title));
     fixture.phase=ONLINE_ERROR;
     strcpy(fixture.message,"后端断开，正在重连\n请检查网络和连接器");
     refresh(NULL);snap("long-message");
@@ -346,28 +348,24 @@ int main(void) {
     assert(lv_obj_has_flag(configuration,LV_OBJ_FLAG_HIDDEN));
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_PRESS);online_ui_key(BSP_BTN_DOWN,BSP_BTN_RELEASE);
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
-    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(menu.page==ONLINE_CONNECTION);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(menu.page==ONLINE_STATUS);
     assert(!lv_obj_has_flag(configuration,LV_OBJ_FLAG_HIDDEN));snap("status-empty");
-    assert(strstr(lv_label_get_text(status_text),"操作说明"));
-    assert(strstr(lv_label_get_text(status_text),"按住下键说话"));
-    fixture.configured=true;fixture.password_set=true;fixture.token_set=true;
+    fixture.configured=true;fixture.has_ip=true;fixture.token_set=true;
     strcpy(fixture.ssid,"Home Wi-Fi");strcpy(fixture.host,"192.168.1.10:3101");
     refresh(NULL);snap("status-configured");
-    assert(strstr(lv_label_get_text(status_text),"Home Wi-Fi"));
-    assert(strstr(lv_label_get_text(status_text),"192.168.1.10:3101"));
+    assert(!strcmp(lv_label_get_text(status_value[1]),fixture.ssid));
+    assert(!strcmp(lv_label_get_text(status_value[2]),fixture.host));
     strcpy(fixture.ssid,"12345678901234567890123456789012");refresh(NULL);snap("status-long-ssid");
-    int status_top=lv_obj_get_scroll_y(configuration);
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
-    assert(lv_obj_get_scroll_y(configuration)>status_top);snap("status-guide");
-    online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);refresh(NULL);
-    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(menu.page==ONLINE_SETTINGS && menu.selected==ONLINE_MENU_CONNECTION);
+    assert(menu.page==ONLINE_STATUS);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(menu.page==ONLINE_SETTINGS && menu.selected==ONLINE_MENU_STATUS);
     online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);refresh(NULL);
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(menu.page==ONLINE_DISPLAY);
     online_theme_t before=fixture.theme;
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(themes==1 && fixture.theme!=before);
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(themes==2 && fixture.theme==before);
     snap("settings-empty");
-    fixture.configured=true;fixture.password_set=true;fixture.token_set=true;strcpy(fixture.ssid,"Home Wi-Fi");strcpy(fixture.host,"192.168.1.10:3101");
+    fixture.configured=true;fixture.token_set=true;strcpy(fixture.ssid,"Home Wi-Fi");strcpy(fixture.host,"192.168.1.10:3101");
     refresh(NULL);snap("settings");
     strcpy(fixture.ssid,"12345678901234567890123456789012");refresh(NULL);check();
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
@@ -394,23 +392,51 @@ int main(void) {
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(!fixture.overlay);
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
-    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(!fixture.cues);snap("cues-off");
-    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(fixture.cues);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(menu.page==ONLINE_SETTINGS);
     online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);
     assert(lv_obj_has_flag(header,LV_OBJ_FLAG_HIDDEN) && lv_obj_has_flag(home_controls,LV_OBJ_FLAG_HIDDEN));
     assert(lv_obj_has_flag(title,LV_OBJ_FLAG_HIDDEN) && !lv_anim_get(title,NULL));snap("home-clean");
-    online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);
     online_ui_key(BSP_BTN_UP,BSP_BTN_PRESS);online_ui_key(BSP_BTN_UP,BSP_BTN_LONG);refresh(NULL);
-    assert(fixture.overlay && menu.page==ONLINE_SETTINGS);
+    assert(fixture.overlay && menu.page==ONLINE_HOME);
     online_ui_key(BSP_BTN_UP,BSP_BTN_PRESS);online_ui_key(BSP_BTN_UP,BSP_BTN_LONG);refresh(NULL);
-    assert(!fixture.overlay && menu.page==ONLINE_SETTINGS);
+    assert(!fixture.overlay && menu.page==ONLINE_HOME);
     online_ui_key(BSP_BTN_UP,BSP_BTN_RELEASE);online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);
-    online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);refresh(NULL);
-    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);snap("confirm");assert(setups==0);
-    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(setups==0 && menu.page==ONLINE_SETTINGS);
-    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);
+    assert(menu.page==ONLINE_SETTINGS && menu.selected==ONLINE_MENU_DISPLAY);
+    fixture.theme=ONLINE_THEME_WHALE;refresh(NULL);
+    lv_tick_inc(200);lv_anim_refr_now();snap("whale-settings-grid");
+    online_ui_key(BSP_BTN_DOWN,BSP_BTN_PRESS);online_ui_key(BSP_BTN_DOWN,BSP_BTN_LONG);refresh(NULL);
+    assert(menu.selected==ONLINE_MENU_SOUND && !fixture.overlay);
+    online_ui_key(BSP_BTN_DOWN,BSP_BTN_RELEASE);online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
+    assert(menu.selected==ONLINE_MENU_SOUND);
+    lv_obj_t *sound_card=settings_choices[ONLINE_MENU_SOUND];
+    assert(lv_anim_get(sound_card,draw_bounce));
+    uint32_t lifted=object_render_hash(sound_card);
+    for(unsigned frame=0;frame<7;frame++) {
+        char name[32];snprintf(name,sizeof(name),"settings-bounce-%u",frame);
+        snap(name);lv_tick_inc(33);lv_anim_refr_now();
+    }
+    uint32_t settled=object_render_hash(sound_card);
+    assert(lifted!=settled && !lv_anim_get(sound_card,draw_bounce));
+    refresh(NULL);assert(object_render_hash(sound_card)==settled);
+    fixture.theme=ONLINE_THEME_MINT;refresh(NULL);snap("mint-settings-grid");
+    online_ui_key(BSP_BTN_UP,BSP_BTN_PRESS);online_ui_key(BSP_BTN_UP,BSP_BTN_LONG);refresh(NULL);
+    online_ui_key(BSP_BTN_UP,BSP_BTN_RELEASE);online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);refresh(NULL);
+    assert(menu.selected==ONLINE_MENU_DISPLAY && !fixture.overlay);
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
-    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(setups==1);
+    assert(!lv_anim_get(settings_choices[ONLINE_MENU_DISPLAY],draw_bounce));
+    online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(menu.page==ONLINE_SOUND);
+    assert(!lv_anim_get(sound_card,draw_bounce));snap("sounds");
+    fixture.volume=100;refresh(NULL);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(fixture.volume==0);
+    snap("sound-muted");
+    online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(!fixture.cues);snap("cues-off");
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(fixture.cues);
+    online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(menu.page==ONLINE_SETTINGS);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);
     fixture.theme=ONLINE_THEME_MINT;fixture.phase=ONLINE_LISTENING;fixture.mic=true;refresh(NULL);
     assert(!lv_obj_has_flag(ears[0],LV_OBJ_FLAG_HIDDEN));
     fixture.phase=ONLINE_SPEAKING;fixture.level=1000;refresh(NULL);check();int y=lv_obj_get_height(mouth);
@@ -484,7 +510,64 @@ int main(void) {
         online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(toggles==before);
         online_ui_key(BSP_BTN_OK,BSP_BTN_RELEASE);
     }
-    fixture.brightness=100;fixture.overlay=true;buttons_available=false;refresh(NULL);check();
+    fixture.brightness=100;fixture.overlay=true;fixture.idle=ONLINE_IDLE_NEVER;fixture.phase=ONLINE_SETUP;
+    menu.page=ONLINE_HOME;strcpy(fixture.message,"DSH-Voice-ABCDEF");refresh(NULL);
+    assert(setup_qr[0] && setup_qr[1]);snap("setup-qr");
+    uint32_t code_hash=object_render_hash(setup_qr[0]);refresh(NULL);
+    assert(code_hash==object_render_hash(setup_qr[0]));
+    fixture.phase=ONLINE_READY;refresh(NULL);assert(!setup_qr[0] && !setup_qr[1]);
+    fixture.phase=ONLINE_SETUP;refresh(NULL);assert(setup_qr[0] && setup_qr[1]);
+    assert(code_hash==object_render_hash(setup_qr[0])); /* Re-entering the same hotspot restores freed QR buffers. */
+    menu.page=ONLINE_SETTINGS;menu.selected=ONLINE_MENU_CONNECTION;refresh(NULL);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_PRESS);online_ui_key(BSP_BTN_OK,BSP_BTN_RELEASE);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(menu.page==ONLINE_CONNECTION);
+    snap("networks-empty");
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);
+    assert(menu.page==ONLINE_HOME && !setups); /* Already in provisioning, return to QR. */
+    unsigned before_resume_mic=toggles;
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);
+    assert(!network_switches && toggles==before_resume_mic); /* First boot has no saved network. */
+    fixture.phase=ONLINE_READY;
+    online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);
+    online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);refresh(NULL);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(menu.page==ONLINE_CONNECTION);
+    online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);refresh(NULL);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(menu.page==ONLINE_SETTINGS);
+    fixture.profile_count=3;strcpy(fixture.profile_ssids[0],"Home");strcpy(fixture.profile_ssids[1],"Office");
+    strcpy(fixture.profile_ssids[2],"12345678901234567890123456789012");
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);snap("networks");
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(!network_switches);
+    online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(network_switches==1 && selected_network==1);
+    fixture.profile_save_failed=true;refresh(NULL);snap("networks-save-failed");fixture.profile_save_failed=false;
+    online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);snap("networks-long-ssid");
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(network_switches==2 && selected_network==2);
+    online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
+    snap("networks-reconfigure");
+    online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(menu.page==ONLINE_SETTINGS);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);
+    online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);refresh(NULL);
+    online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);refresh(NULL);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);
+    assert(menu.page==ONLINE_HOME && setups==1);
+    fixture.phase=ONLINE_SETUP;
+    strcpy(fixture.message,"DSH-Voice-ABCDEF");
+    refresh(NULL);snap("setup-resume");
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);
+    assert(network_switches==3 && selected_network==0 && toggles==before_resume_mic);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);
+    online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);refresh(NULL);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);
+    snap("networks-resume");
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);
+    assert(network_switches==4 && selected_network==0);
+    online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);refresh(NULL);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(menu.page==ONLINE_SETTINGS);
+    online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);refresh(NULL);assert(menu.selected==ONLINE_MENU_HOME);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);
+    assert(menu.page==ONLINE_HOME && network_switches==5 && selected_network==0);
+    fixture.phase=ONLINE_READY;buttons_available=false;refresh(NULL);check();
     assert(backlight==100 && strstr(lv_label_get_text(title),"按键不可用"));
     puts("Online UI: both themes, phases, glyphs, clipping, bounds and controls PASS");
 }

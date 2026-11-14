@@ -67,5 +67,6 @@ test('keep-Wi-Fi, pairing-code zeros, save retry and successful save retain thei
   const p=page({configured:true});await tick();assert.equal(p.el('wifi').disabled,true);assert.equal(p.el('password').disabled,true);
   p.el('token').value='0012';p.setSave(async()=>({ok:false,text:async()=> 'retry'}));await p.submit();
   const data=JSON.parse(p.calls.at(-1).options.body);assert.equal(data.keepWifi,true);assert.equal(data.token,'0012');assert.equal(data.port,3101);assert.equal('password' in data,false);
-  assert.equal(p.el('save').disabled,false);p.setSave(async()=>({ok:true,text:async()=> 'saved'}));await p.submit();assert.equal(p.el('save').disabled,true);assert.equal(p.el('refresh').disabled,true);
+  assert.equal(p.el('save').disabled,false);assert.equal(p.el('afterSave').hidden,false);
+  p.setSave(async()=>({ok:true,text:async()=> 'saved'}));await p.submit();assert.equal(p.el('save').disabled,true);assert.equal(p.el('refresh').disabled,true);assert.equal(p.el('afterSave').hidden,true);
 });

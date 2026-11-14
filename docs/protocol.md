@@ -13,6 +13,13 @@ AI Passport connector. It is not a general Qwen Gateway implementation.
 - Keep `client.instance_id = bean_<Wi-Fi MAC hex>` and the existing client type
   for compatibility. Product branding does not rotate device identity.
 - Device configuration remains in the `dsh_voice` NVS namespace.
+- Connection profiles are stored in one versioned `profiles` blob (up to three complete
+  version-one configurations, most recent/selected first). The original `config` blob
+  remains untouched as the legacy read fallback when `profiles` is absent. A save updates
+  by SSID and evicts the oldest entry at capacity; selecting a saved entry atomically
+  moves its full endpoint and credentials to the front and reboots. Reads and rejected
+  saves do not migrate or erase data. Downgrading to older firmware sees its original
+  single configuration. Identity, session keys and partition layout are unchanged.
 
 ## Audio and ordering
 

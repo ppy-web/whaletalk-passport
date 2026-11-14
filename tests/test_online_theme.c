@@ -4,8 +4,8 @@
 #include <stdio.h>
 #include <string.h>
 
-static bool present[5],fail_open,fail_set,fail_commit;
-static uint8_t stored[5],pending;
+static bool present[6],fail_open,fail_set,fail_commit;
+static uint8_t stored[6],pending;
 static int pending_key;
 static unsigned open_handles;
 static int key_index(const char *key) {
@@ -14,6 +14,7 @@ static int key_index(const char *key) {
     if(!strcmp(key,"brightness"))return 2;
     if(!strcmp(key,"overlay"))return 3;
     if(!strcmp(key,"cues"))return 4;
+    if(!strcmp(key,"volume"))return 5;
     return -1;
 }
 
@@ -100,6 +101,15 @@ int main(void) {
     assert(online_cues_save(true) && online_cues_load());
     stored[4]=255;assert(online_cues_load());
     fail_open=true;assert(online_cues_load() && !online_cues_save(false));fail_open=false;
+    assert(online_volume_load()==ONLINE_VOLUME_DEFAULT);
+    assert(online_volume_save(0) && online_volume_load()==0);
+    fail_commit=true;
+    assert(!online_volume_save(90) && online_volume_load()==0);
+    fail_commit=false;
+    assert(online_volume_save(90) && online_volume_load()==90);
+    assert(!online_volume_save(42) && online_volume_load()==90);
+    stored[5]=255;
+    assert(online_volume_load()==ONLINE_VOLUME_DEFAULT);
     assert(!open_handles);
     puts("Theme persistence, fallback, failure handling and handle cleanup: PASS");
 }

@@ -17,16 +17,16 @@ connection, ready, listening, thinking, speaking, error, settings and confirmed
 reconfiguration screens. Main labels use 16px fonts, home status uses 12px and the provisioning address uses 20px. Chinese labels use compiled font subsets; arbitrary
 model-response transcripts are not displayed.
 
-The home status line shows connection, microphone, recording, conversation progress
+The home status line shows connection progress, recording, conversation progress
 or errors at the top center. Longer messages scroll horizontally; errors and
 push-to-talk feedback take priority. To its left, joined/broken chain links show the DSH
-connection, followed by a microphone icon with a slash when disabled. An enabled
-microphone does not imply audio is currently uploading. The battery at the right
+connection. The battery at the right
 fills with its measured charge, turns red at 15% or below, and shows a dash when
 unknown. Normal listening, thinking and speech use a waveform, three dots and a
 speaker alongside the character; connection and error details remain readable.
 The three bottom groups map UP to volume, OK to the microphone, and DOWN to
-cancel. Five volume bars represent 25, 50, 75, 90 and 100%; a crossed speaker is
+cancel. The bottom microphone icon shows a slash when disabled.
+Five volume bars represent 25, 50, 75, 90 and 100%; a crossed speaker is
 muted. Inactive volume bars are shown faintly. Each gesture hint has a rounded
 border and at most two icons; volume bars are integrated into the speaker
 indicator. The home screen omits the hold-OK hint; holding OK still opens settings.
@@ -35,7 +35,7 @@ indicator. The home screen omits the hold-OK hint; holding OK still opens settin
 | --- | --- |
 | Short OK | Toggle microphone; initially closed |
 | Short UP | Cycle 0, 25, 50, 75, 90, 100%; 0 mutes |
-| Hold UP | Toggle interface hints, including from settings |
+| Hold UP | Toggle interface hints |
 | Short DOWN | Cancel recognition, generation or playback |
 | Hold DOWN | Speak while holding; release to send |
 | Hold OK | Open settings; hold again to return home |
@@ -51,7 +51,9 @@ cancellation. Turning interface hints off also hides the recording indication.
 
 Settings groups appearance and screen controls under System settings (系统设置); select 返回设置 to go back, or hold OK to return home. Interface hints (界面提示) default to on. When off, the home screen shows only the background and character; status and button icons and messages are hidden, but the physical buttons still work. Provisioning remains visible. The preference survives restart; a save failure is shown in settings and toggling retries it. Long home messages scroll in the top status line without moving the bottom controls.
 
-Sound cues (提示音) in System settings default to on and survive restart.
+Sound settings (声音设置) occupies slot 3. Press OK on the volume row to cycle levels,
+or select the cue row to switch cues on or off. Both preferences survive restart.
+The volume defaults to 75% and sound cues default to on.
 Turning them off disables both operation and failure cues without changing spoken
 replies. Cues follow the device volume, including mute. Microphone changes,
 push-to-talk, cancellation, connection changes, failures and volume adjustments
@@ -61,7 +63,19 @@ The device synthesizes these tones without external audio assets; the feedback
 choices draw on [Apple's feedback guidance](https://developer.apple.com/design/human-interface-guidelines/feedback)
 and [Microsoft's sound design guidance](https://learn.microsoft.com/en-us/windows/mixed-reality/design/spatial-sound-design).
 
-Status information (状态信息) shows the configured Wi-Fi, computer address and saved-password/pairing status without displaying credentials. The operation guide continues below the status values and covers home controls, settings, network setup and background upload. UP/DOWN scroll and OK returns to settings.
+Status information (状态信息) shows Wi-Fi and backend connection status, the network name, computer address, whether a pairing code is saved, and QQ support group 1104616387. Press OK to return to settings. Both provisioning screens show the support group as well.
+
+Connection settings (连接设置) occupies slot 6. Press OK on 重新配置 to enter provisioning.
+The same page lists up to three recently saved or selected connection profiles,
+with the current one first. Each includes the SSID, password, computer endpoint and pairing
+credential. Saving the same SSID updates it; a fourth distinct SSID evicts the least recently
+used profile. UP/DOWN selects and OK saves another profile and restarts, interrupting voice.
+During normal operation, selecting the current profile leaves it active. During provisioning,
+press OK on the QR screen, select the first saved profile, or choose 返回首页 to restart
+and reconnect with the saved network. First-time setup remains on the QR screen until a profile is saved.
+Existing single
+profiles remain readable and are imported on the first save or switch, preserving identity,
+backgrounds and the retained conversation.
 
 Thinking cycles through thoughtful, attentive and blinking expressions every
 3.2 seconds, alongside bouncing dots. It remains in the real processing phase
@@ -125,8 +139,10 @@ and measure stable average battery-side current against the old firmware's
 screen-off state under the same network/signal and brightness/volume settings.
 Neither a current spike nor a battery percentage establishes a runtime gain.
 
-In settings, UP/DOWN select and OK confirms. Reconfiguration needs confirmation;
-cancelling keeps existing settings. Audio uploads only after the user enables
+On the two-column settings screen, tap UP/DOWN to move one item in reading order.
+Hold UP/DOWN to move a row in the same column, wrapping at the ends. OK opens the
+selected card. Its icon briefly tilts and grows, then returns to its resting size while the border stays highlighted.
+Audio uploads only after the user enables
 the microphone. Doubao recognition uploads while capture continues. Capture pauses after local segmentation while waiting for final recognition/thinking/playback, and resumes after
 speaker completion is acknowledged. No automatic voice interruption or acoustic
 echo cancellation is provided. Handle tool approvals in DSH.
@@ -203,8 +219,8 @@ a new preset. The home status bar uses 70% background opacity; messages and outl
 use 60%, allowing the picture to show through while keeping controls legible.
 
 2. Enable AI Passport Connector and **generate a pairing code and enable the connection**. It displays available computer IPs and **four digits**, and listens on `0.0.0.0:3101`. Enter the computer LAN IP on the device, never `0.0.0.0`, `127.0.0.1` or the device address.
-3. Join the displayed `DSH-Voice-*` hotspot on a phone; **no password is needed**. Open `http://192.168.4.1` and enter the computer IP plus the same four digits, including leading zeros.
-4. First-time setup also needs 2.4 GHz Wi-Fi credentials. Keep saved Wi-Fi to change only the computer address or pairing code. Port 3101 is under Advanced settings.
+3. Scan the screen's left QR code to join `DSH-Voice-*`; **no password is needed**. After joining, scan the right QR code to open `http://192.168.4.1`, then enter the computer IP and the same four digits, including leading zeros. Manual joining/address entry also works. The hotspot name is stable per device; Wi-Fi QR support depends on the phone's scanner.
+4. First-time setup also needs 2.4 GHz Wi-Fi credentials. Select 沿用当前 Wi-Fi to change only the computer address or pairing code. Port 3101 is under Advanced settings.
    Use Wi-Fi on the computer's LAN or its 2.4 GHz mobile hotspot; enable it before entering setup. If missing, use **Refresh Wi-Fi list** to scan again, or enter a hidden network manually. Reflashing is unnecessary. The setup page may briefly slow down during scanning; wait for the results.
 5. Saving restarts the device. When ready, briefly press OK, speak and pause for the complete reply. Hold OK to open settings and reconfigure.
 
@@ -218,7 +234,7 @@ for bounded firewall rules and diagnosis.
 
 Allow the listener through the computer firewall. On computers with multiple interfaces, choose an IP reachable from device Wi-Fi. A computer currently connected to the device setup hotspot must not mistake that temporary network for its regular LAN. The hotspot is for provisioning; DSH must keep running on the computer.
 
-Wi-Fi credentials and pairing codes live in the unencrypted `dsh_voice` NVS namespace. The provisioning page never returns saved passwords or pairing codes. Recordings are not stored on the device. DSH manages conversation persistence and tool approvals; see the root [plugin handbook](https://github.com/ppy-web/dsh-plugin-xiaomi-mimo-tts/blob/main/handbook.md).
+Up to three sets of Wi-Fi credentials and pairing codes live in the unencrypted `dsh_voice` NVS namespace. The provisioning page never returns saved passwords or pairing codes. QR codes contain only the device's open setup hotspot or setup-page URL, without regular Wi-Fi passwords, pairing codes or device identity. Recordings are not stored on the device. DSH manages conversation persistence and tool approvals; see the root [plugin handbook](https://github.com/ppy-web/dsh-plugin-xiaomi-mimo-tts/blob/main/handbook.md).
 
 ## Artifacts and hardware acceptance
 
