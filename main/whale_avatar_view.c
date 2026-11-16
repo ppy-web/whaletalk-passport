@@ -1,4 +1,5 @@
 #include "whale_avatar_view.h"
+#include "home_foreground.h"
 #include "src/draw/lv_image_decoder_private.h"
 
 static bool registered;
@@ -11,8 +12,8 @@ static const lv_image_dsc_t *const *const portrait_frames[ONLINE_THEME_COUNT]={
     [ONLINE_THEME_WHALE_MAID]=whale_maid_avatar_frames,
     [ONLINE_THEME_CLAUDE]=claude_avatar_frames,
 };
-#define PIXEL_DATA_OFFSET (WHALE_AVATAR_PALETTE_BYTES+(WHALE_VIEW_HEIGHT+1)*2)
 static const lv_image_dsc_t *frame_for(const void *source) {
+    if(source==&home_foreground_top || source==&home_foreground_bottom)return source;
     for(unsigned theme=0;theme<ONLINE_THEME_COUNT;theme++) {
         const lv_image_dsc_t *const *frames=portrait_frames[theme];
         if(frames)for(unsigned n=0;n<ONLINE_AVATAR_COUNT;n++)if(source==frames[n])return frames[n];
@@ -21,16 +22,18 @@ static const lv_image_dsc_t *frame_for(const void *source) {
 }
 static lv_result_t info(lv_image_decoder_t *decoder,lv_image_decoder_dsc_t *dsc,lv_image_header_t *header) {
     (void)decoder;
-    if(!frame_for(dsc->src))return LV_RESULT_INVALID;
+    const lv_image_dsc_t *frame=frame_for(dsc->src);
+    if(!frame)return LV_RESULT_INVALID;
     *header=(lv_image_header_t){.magic=LV_IMAGE_HEADER_MAGIC,.cf=LV_COLOR_FORMAT_RGB565A8,
-        .w=WHALE_VIEW_WIDTH,.h=WHALE_VIEW_HEIGHT,.stride=WHALE_VIEW_WIDTH*2};
+        .w=WHALE_VIEW_WIDTH,.h=frame->header.h,.stride=WHALE_VIEW_WIDTH*2};
     return LV_RESULT_OK;
 }
 static lv_result_t open_image(lv_image_decoder_t *decoder,lv_image_decoder_dsc_t *dsc) {
     (void)decoder;
     const lv_image_dsc_t *frame=frame_for(dsc->src);
     if(!frame || frame->header.cf!=LV_COLOR_FORMAT_RAW ||
-        frame->data_size<=PIXEL_DATA_OFFSET)return LV_RESULT_INVALID;
+        frame->header.w!=WHALE_VIEW_WIDTH || frame->header.h>WHALE_VIEW_HEIGHT ||
+        frame->data_size<=WHALE_AVATAR_PALETTE_BYTES+(frame->header.h+1)*2)return LV_RESULT_INVALID;
     dsc->user_data=(void *)frame;dsc->args.no_cache=true;dsc->decoded=NULL;
     return LV_RESULT_OK;
 }
@@ -43,10 +46,11 @@ static void write_pixel(uint8_t *color,uint8_t *mask,const uint8_t *palette,unsi
 }
 static bool decode_row(const lv_image_dsc_t *frame,unsigned y,unsigned left,unsigned width,lv_draw_buf_t *row) {
     const uint8_t *palette=frame->data;
+    unsigned pixel_data_offset=WHALE_AVATAR_PALETTE_BYTES+(frame->header.h+1)*2;
     const uint8_t *offset=palette+WHALE_AVATAR_PALETTE_BYTES+y*2;
     unsigned start=read_le16(offset),end=read_le16(offset+2);
-    if(end<=start || end>frame->data_size-PIXEL_DATA_OFFSET || end-start>WHALE_VIEW_WIDTH)return false;
-    const uint8_t *p=palette+PIXEL_DATA_OFFSET+start,*limit=p+(end-start);
+    if(end<=start || end>frame->data_size-pixel_data_offset || end-start>WHALE_VIEW_WIDTH)return false;
+    const uint8_t *p=palette+pixel_data_offset+start,*limit=p+(end-start);
     uint8_t *color=row->data,*mask=color+row->header.stride;
     if(end-start==WHALE_VIEW_WIDTH) {
         for(unsigned n=0;n<width;n++)write_pixel(color+n*2,mask+n,palette,p[left+n]);
@@ -73,7 +77,7 @@ static lv_result_t get_area(lv_image_decoder_t *decoder,lv_image_decoder_dsc_t *
     if(area->y1>full->y2)return LV_RESULT_INVALID;
     int width=lv_area_get_width(area);
     if(!dsc->user_data || area->x1<0 || area->x2>=WHALE_VIEW_WIDTH || area->y1<0 ||
-       area->y1>=WHALE_VIEW_HEIGHT || width<=0)return LV_RESULT_INVALID;
+       area->y1>=((const lv_image_dsc_t *)dsc->user_data)->header.h || width<=0)return LV_RESULT_INVALID;
     /* RGB565A8 uses a two-byte color stride and a separate one-byte A8 plane. */
     lv_draw_buf_t *row=lv_draw_buf_reshape(&scanline,LV_COLOR_FORMAT_RGB565A8,(unsigned)width,1,(unsigned)width*2);
     if(!row || !decode_row(dsc->user_data,(unsigned)area->y1,(unsigned)area->x1,(unsigned)width,row))

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compile original RGB565 and shared indexed BMP background assets."""
+"""Compile shared indexed BMP backgrounds and compatible PNG web previews."""
 from io import BytesIO
 from pathlib import Path
 from struct import unpack_from
@@ -26,12 +26,15 @@ def emit(index, raw, color_format, stride):
 for index, name in enumerate(names):
     with Image.open(directory / f'{name}-source.png') as original:
         frame = ImageOps.fit(original.convert('RGB'), (240, 320), method=Image.Resampling.LANCZOS)
-    frame.save(directory / f'{name}.png', optimize=True)
-    raw = bytearray()
-    for r, g, b in frame.get_flattened_data():
-        value = (r >> 3) << 11 | (g >> 2) << 5 | b >> 3
-        raw.extend((value & 255, value >> 8))
-    emit(index, raw, 'LV_COLOR_FORMAT_RGB565', 480)
+    indexed = frame.quantize(colors=256, method=Image.Quantize.MEDIANCUT)
+    indexed.save(directory / f'{name}.png', optimize=True)
+    image = BytesIO()
+    indexed.save(image, 'BMP')
+    raw = image.getvalue()
+    if (raw[:2] != b'BM' or len(raw) != 1078 + 240 * 320
+            or unpack_from('<IIiiHHI', raw, 10) != (1078, 40, 240, 320, 1, 8, 0)):
+        raise ValueError(f'Unexpected indexed BMP layout for {name}')
+    emit(index, raw, 'LV_COLOR_FORMAT_RAW', 0)
 
 seasonal_bytes = 0
 for index, name in enumerate(seasons, start=len(names)):
@@ -53,4 +56,4 @@ for index, key in enumerate(('DAY', 'NIGHT', 'SPRING', 'SUMMER', 'AUTUMN', 'WINT
     output.append(f'  [ONLINE_BACKGROUND_{key}] = &background_{index},')
 output.extend(['};', ''])
 (directory / 'whale_backgrounds.c').write_text('\n'.join(output), encoding='utf-8')
-print(f'Backgrounds: 307,200 RGB565 bytes and {seasonal_bytes:,} indexed seasonal bytes in flash')
+print(f'Backgrounds: {2*(1078+240*320):,} indexed day/night bytes and {seasonal_bytes:,} indexed seasonal bytes in flash')

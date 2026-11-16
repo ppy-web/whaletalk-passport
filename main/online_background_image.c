@@ -13,9 +13,13 @@ LV_DRAW_BUF_DEFINE_STATIC(scanline,240,1,LV_COLOR_FORMAT_RGB565);
 static bool registered;
 static bool supported(const void *src) {
     if(src==&source)return online_background_valid(source.data,source.data_size);
-    for(unsigned n=ONLINE_BACKGROUND_SPRING;n<=ONLINE_BACKGROUND_WINTER;n++) {
+    static const unsigned presets[]={ONLINE_BACKGROUND_DAY,ONLINE_BACKGROUND_NIGHT,
+        ONLINE_BACKGROUND_SPRING,ONLINE_BACKGROUND_SUMMER,ONLINE_BACKGROUND_AUTUMN,ONLINE_BACKGROUND_WINTER};
+    for(unsigned i=0;i<sizeof(presets)/sizeof(*presets);i++) {
+        unsigned n=presets[i];
         const lv_image_dsc_t *preset=whale_backgrounds[n];
-        if(src==preset)return preset && preset->data_size==WHALE_SEASON_BYTES;
+        unsigned size=n<=ONLINE_BACKGROUND_NIGHT?1078+240*320:WHALE_SEASON_BYTES;
+        if(src==preset)return preset && preset->data_size==size;
     }
     return false;
 }
@@ -30,14 +34,17 @@ static lv_result_t open_image(lv_image_decoder_t *decoder,lv_image_decoder_dsc_t
     if(!supported(dsc->src))return LV_RESULT_INVALID;
     dsc->args.no_cache=true;dsc->decoded=NULL;return LV_RESULT_OK;
 }
-static void season_row(const uint8_t *bmp,unsigned x,unsigned y,unsigned width,uint16_t *out) {
+static void preset_row(const uint8_t *bmp,bool full_size,unsigned x,unsigned y,unsigned width,uint16_t *out) {
     /* BMP stores indexed rows bottom-up and the palette in B,G,R,0 order.
-     * The source is exactly half the panel size in each direction. */
+     * Seasonal sources are half the panel size; day and night are native size. */
+    unsigned source_width=full_size?240:WHALE_SEASON_WIDTH;
+    unsigned source_height=full_size?320:WHALE_SEASON_HEIGHT;
+    unsigned scale=full_size?1:2;
     const uint8_t *palette=bmp+WHALE_SEASON_PALETTE_OFFSET;
     const uint8_t *indices=bmp+WHALE_SEASON_PIXEL_OFFSET+
-        (WHALE_SEASON_HEIGHT-1-y/2)*WHALE_SEASON_WIDTH;
+        (source_height-1-y/scale)*source_width;
     for(unsigned n=0;n<width;n++) {
-        const uint8_t *entry=palette+4*indices[(x+n)/2];
+        const uint8_t *entry=palette+4*indices[(x+n)/scale];
         out[n]=(uint16_t)((entry[2]>>3)<<11 | (entry[1]>>2)<<5 | entry[0]>>3);
     }
 }
@@ -57,7 +64,8 @@ static lv_result_t get_area(lv_image_decoder_t *decoder,lv_image_decoder_dsc_t *
         if(!online_background_decode_row(image->data,image->data_size,x,y,(unsigned)width,(uint16_t *)row->data))
             return LV_RESULT_INVALID;
     } else {
-        season_row(image->data,x,y,(unsigned)width,(uint16_t *)row->data);
+        preset_row(image->data,image==whale_backgrounds[ONLINE_BACKGROUND_DAY] ||
+            image==whale_backgrounds[ONLINE_BACKGROUND_NIGHT],x,y,(unsigned)width,(uint16_t *)row->data);
     }
     dsc->decoded=row;return LV_RESULT_OK;
 }

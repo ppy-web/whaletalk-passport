@@ -2,8 +2,8 @@
 #include "lvgl.h"
 #include "online_state.h"
 
-/* Each seasonal preset is a 120×160 uncompressed, 8-bit indexed BMP.
- * Both the screen and the settings portal use the same flash data. */
+/* Presets use uncompressed 8-bit indexed BMPs. Day/night are 240×320;
+ * seasonal images are 120×160 and shared with the settings portal. */
 #define WHALE_SEASON_WIDTH 120
 #define WHALE_SEASON_HEIGHT 160
 #define WHALE_SEASON_PALETTE_OFFSET 54

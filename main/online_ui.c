@@ -10,6 +10,7 @@
 #include "online_background_image.h"
 #include "online_onboarding.h"
 #include "whale_backgrounds.h"
+#include "home_foreground.h"
 #include <stdio.h>
 #include <stdatomic.h>
 #include <string.h>
@@ -46,8 +47,9 @@ static const struct {
 static lv_obj_t *title,*header,*footer,*setup_panel,*setup_text;
 static lv_obj_t *setup_qr[2];
 static lv_obj_t *home_controls,*background_image,*settings_list;
+static lv_obj_t *home_foreground_top_obj,*home_foreground_bottom_obj;
 static ui_icon_t link_icon,battery_icon,phase_icon,volume_icon;
-static ui_icon_t up_icon,ok_icon,down_icon,action_mic,stop_icon;
+static ui_icon_t action_mic;
 static lv_obj_t *app_screen,*portrait_layer,*portrait_image;
 static lv_obj_t *settings_layer,*configuration,*settings_footer,*settings_help;
 static lv_obj_t *status_value[4],*settings_choices[SETTINGS_ROWS];
@@ -73,14 +75,6 @@ static lv_obj_t *label(lv_obj_t *p,const char *value,int x,int y,int w,int h,boo
     lv_obj_set_style_text_align(o,LV_TEXT_ALIGN_CENTER,0);
     lv_obj_set_style_text_line_space(o,4,0);
     lv_label_set_long_mode(o,LV_LABEL_LONG_WRAP); lv_label_set_text(o,value); return o;
-}
-static lv_obj_t *key_hint(lv_obj_t *parent,int x,int y,int w,int h) {
-    lv_obj_t *o=shape(parent,x,y,w,h,INK,6);
-    lv_obj_remove_flag(o,LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_set_style_bg_opa(o,LV_OPA_TRANSP,0);
-    lv_obj_set_style_border_color(o,lv_color_hex(INK),0);
-    lv_obj_set_style_border_width(o,1,0);
-    return o;
 }
 static void visibility(lv_obj_t *o,bool show) {
     if(show==!lv_obj_has_flag(o,LV_OBJ_FLAG_HIDDEN))return;
@@ -280,8 +274,14 @@ static void refresh(lv_timer_t *timer) {
         lv_label_set_long_mode(title,home?(show_overlay?LV_LABEL_LONG_SCROLL:LV_LABEL_LONG_CLIP):LV_LABEL_LONG_WRAP);
         title_mode=next_title_mode;
     }
+    const char *status=home?home_status_text(&s):"";
+    bool phase_status=home && !setup && s.overlay && buttons_available && !s.feedback_visible &&
+        !(s.progress && s.progress[0]) &&
+        (!status[0] || !strcmp(status,"正在思考") || !strcmp(status,"正在回答")) &&
+        (s.phase==ONLINE_THINKING || s.phase==ONLINE_SPEAKING ||
+         s.phase==ONLINE_LISTENING || (s.phase==ONLINE_READY && s.mic));
     if(home) {
-        if(show_overlay)home_status_update(home_status_text(&s));
+        if(show_overlay)home_status_update(phase_status?"":status);
     } else {
         static const char *const pages[]={
             [ONLINE_SETTINGS]="设置",[ONLINE_DISPLAY]="系统设置",[ONLINE_STATUS]="状态信息",
@@ -289,7 +289,9 @@ static void refresh(lv_timer_t *timer) {
         };
         text_changed(title,pages[menu.page]);
     }
-    visibility(header,show_overlay);visibility(title,show_overlay);
+    visibility(header,show_overlay && (!home || setup));visibility(title,show_overlay);
+    visibility(home_foreground_top_obj,home && !setup && s.overlay);
+    visibility(home_foreground_bottom_obj,home && !setup && s.overlay && buttons_available);
     visibility(link_icon.obj,show_overlay);visibility(battery_icon.obj,show_overlay);
     online_background_t selected=online_background_normalize(s.background);
     const lv_image_dsc_t *background=whale_backgrounds[selected];
@@ -300,15 +302,17 @@ static void refresh(lv_timer_t *timer) {
             background=whale_backgrounds[selected];
         }
     }
-    visibility(background_image,home && !setup && background);
-    if(home && !setup && background && lv_image_get_src(background_image)!=background)
+    /* Reuse the chosen background behind settings rather than keeping a second
+     * full-screen asset. The settings surface stays bright enough for text. */
+    visibility(background_image,(!home || !setup) && background);
+    if((!home || !setup) && background && lv_image_get_src(background_image)!=background)
         lv_image_set_src(background_image,background);
+    lv_opa_t settings_opacity=background?LV_OPA_80:LV_OPA_COVER;
+    if(lv_obj_get_style_bg_opa(settings_layer,0)!=settings_opacity)
+        lv_obj_set_style_bg_opa(settings_layer,settings_opacity,0);
     visibility(portrait_layer,home && !setup && theme!=ONLINE_THEME_BACKGROUND_ONLY);
-    /* Actionable details use the top status line; leave room for phase icons. */
-    bool detail=!buttons_available || s.feedback_visible || s.phase==ONLINE_ERROR || s.phase==ONLINE_CONNECTING ||
-        (s.phase==ONLINE_READY && !s.audio_ok);
     visibility(setup_panel,home && setup);
-    visibility(phase_icon.obj,home && !setup && s.overlay && !detail && (s.phase!=ONLINE_READY || s.mic));
+    visibility(phase_icon.obj,phase_status);
     visibility(home_controls,home && !setup && s.overlay && buttons_available);
     ui_icon_update(&link_icon,UI_LINK,s.linked,s.linked?0x28715E:INK);
     ui_icon_update(&action_mic,UI_MIC,s.mic || s.ptt_recording,INK);
@@ -455,8 +459,7 @@ void online_ui_enter(bool buttons_ok) {
     lv_image_set_src(background_image,whale_backgrounds[ONLINE_BACKGROUND_DAY]);
     lv_image_set_pivot(background_image,0,0);
     lv_obj_move_background(background_image);
-    /* Individual rect blending keeps the photo visible without allocating an
-     * off-screen layer; retain enough tint for text over dark custom images. */
+    /* The plain header remains on setup and settings screens. */
     header=shape(screen,0,0,240,35,0xE7F0FF,0);
     lv_obj_set_style_bg_opa(header,LV_OPA_50,0);
     lv_obj_move_to_index(header,1);
@@ -467,7 +470,13 @@ void online_ui_enter(bool buttons_ok) {
     lv_obj_set_style_bg_opa(portrait_layer,LV_OPA_TRANSP,0);
     portrait_image=lv_image_create(portrait_layer);
     lv_obj_set_pos(portrait_image,0,0);
-    ui_icon_create(screen,&phase_icon,UI_MIC,178,8,20);
+    home_foreground_top_obj=lv_image_create(screen);
+    lv_image_set_src(home_foreground_top_obj,&home_foreground_top);
+    lv_obj_set_pos(home_foreground_top_obj,0,0);
+    lv_obj_move_foreground(title);
+    lv_obj_move_foreground(link_icon.obj);
+    lv_obj_move_foreground(battery_icon.obj);
+    ui_icon_create(screen,&phase_icon,UI_MIC,110,8,20);
     setup_panel=shape(screen,8,42,224,248,PAPER,14);
     label(setup_panel,"手机扫码配网",8,8,208,24,false,INK);
     setup_text=label(setup_panel,"",8,34,208,24,false,INK);
@@ -478,21 +487,19 @@ void online_ui_enter(bool buttons_ok) {
     label(setup_panel,"热点无需密码",8,218,208,15,true,INK);
     label(setup_panel,HELP_QQ,8,233,208,15,true,INK);
     footer=label(screen,"长按确定进入设置",12,294,216,22,false,INK);
+    home_foreground_bottom_obj=lv_image_create(screen);
+    lv_image_set_src(home_foreground_bottom_obj,&home_foreground_bottom);
+    lv_obj_set_pos(home_foreground_bottom_obj,0,268);
     home_controls=lv_obj_create(screen);lv_obj_remove_style_all(home_controls);
     lv_obj_remove_flag(home_controls,LV_OBJ_FLAG_SCROLLABLE|LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_pos(home_controls,0,284);lv_obj_set_size(home_controls,240,26);
-    lv_obj_t *up_hint=key_hint(home_controls,8,0,64,26);
-    lv_obj_set_style_bg_color(up_hint,lv_color_hex(0xE7F0FF),0);lv_obj_set_style_bg_opa(up_hint,LV_OPA_40,0);
-    ui_icon_create(up_hint,&up_icon,UI_UP,5,3,20);
-    ui_icon_create(up_hint,&volume_icon,UI_VOLUME_LEVEL,28,3,20);
-    lv_obj_t *ok_hint=key_hint(home_controls,88,0,64,26);
-    lv_obj_set_style_bg_color(ok_hint,lv_color_hex(0xE7F0FF),0);lv_obj_set_style_bg_opa(ok_hint,LV_OPA_40,0);
-    ui_icon_create(ok_hint,&ok_icon,UI_OK,10,3,20);
-    ui_icon_create(ok_hint,&action_mic,UI_MIC,34,3,20);
-    lv_obj_t *down_hint=key_hint(home_controls,168,0,64,26);
-    lv_obj_set_style_bg_color(down_hint,lv_color_hex(0xE7F0FF),0);lv_obj_set_style_bg_opa(down_hint,LV_OPA_40,0);
-    ui_icon_create(down_hint,&down_icon,UI_DOWN,10,3,20);
-    ui_icon_create(down_hint,&stop_icon,UI_STOP,34,3,20);
+    /* A translucent, borderless backing keeps both dark icons readable over
+     * arbitrary custom pictures while letting the foreground show through. */
+    lv_obj_t *icon_backing=shape(home_controls,78,0,84,26,0xF0FAFF,13);
+    lv_obj_remove_flag(icon_backing,LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_style_bg_opa(icon_backing,LV_OPA_70,0);
+    ui_icon_create(home_controls,&volume_icon,UI_VOLUME_LEVEL,87,3,20);
+    ui_icon_create(home_controls,&action_mic,UI_MIC,132,3,20);
     settings_layer=shape(screen,0,35,240,285,YELLOW,0);
     settings_help=label(settings_layer,"",8,0,224,22,false,INK);
     configuration=shape(settings_layer,12,12,216,194,PAPER,12);

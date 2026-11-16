@@ -120,6 +120,60 @@ static const char *const theme_names[ONLINE_THEME_COUNT]={
     [ONLINE_THEME_WHALE]="whale",
     [ONLINE_THEME_WHALE_MAID]="whale-maid",[ONLINE_THEME_CLAUDE]="claude",[ONLINE_THEME_BACKGROUND_ONLY]="background-only",
 };
+static void check_foreground_decoding(void) {
+    const lv_image_dsc_t *images[]={&home_foreground_top,&home_foreground_bottom};
+    for(unsigned i=0;i<sizeof(images)/sizeof(*images);i++) {
+        lv_image_decoder_dsc_t decoder;
+        assert(lv_image_decoder_open(&decoder,images[i],NULL)==LV_RESULT_OK);
+        assert(decoder.header.h==images[i]->header.h && decoder.args.no_cache);
+        lv_area_t full={0,0,239,(int32_t)images[i]->header.h-1};
+        lv_area_t area={LV_COORD_MIN,LV_COORD_MIN,LV_COORD_MIN,LV_COORD_MIN};
+        uint8_t reference[240*3];
+        unsigned rows=0,alpha=0;
+        while(lv_image_decoder_get_area(&decoder,&full,&area)==LV_RESULT_OK) {
+            assert(decoder.decoded && decoder.decoded->data_size<=1024);
+            for(unsigned x=0;x<240;x++)alpha+=decoder.decoded->data[decoder.decoded->header.stride+x];
+            if(!rows) {
+                memcpy(reference,decoder.decoded->data,480);
+                memcpy(reference+480,decoder.decoded->data+decoder.decoded->header.stride,240);
+            }
+            rows++;
+        }
+        assert(rows==images[i]->header.h && alpha);
+        lv_image_decoder_close(&decoder);
+        assert(lv_image_decoder_open(&decoder,images[i],NULL)==LV_RESULT_OK);
+        full=(lv_area_t){7,0,225,0};area=(lv_area_t){LV_COORD_MIN,LV_COORD_MIN,LV_COORD_MIN,LV_COORD_MIN};
+        assert(lv_image_decoder_get_area(&decoder,&full,&area)==LV_RESULT_OK);
+        assert(!memcmp(decoder.decoded->data,reference+14,219*2));
+        assert(!memcmp(decoder.decoded->data+decoder.decoded->header.stride,reference+480+7,219));
+        lv_image_decoder_close(&decoder);
+    }
+}
+static void check_preset_backgrounds(void) {
+    const unsigned presets[]={ONLINE_BACKGROUND_DAY,ONLINE_BACKGROUND_NIGHT,ONLINE_BACKGROUND_SPRING,
+        ONLINE_BACKGROUND_SUMMER,ONLINE_BACKGROUND_AUTUMN,ONLINE_BACKGROUND_WINTER};
+    const unsigned rows[]={0,81,319};
+    for(unsigned i=0;i<sizeof(presets)/sizeof(*presets);i++) {
+        const lv_image_dsc_t *image=whale_backgrounds[presets[i]];
+        const unsigned scale=i<2?1:2,source_width=240/scale,source_height=320/scale;
+        for(unsigned j=0;j<sizeof(rows)/sizeof(*rows);j++) {
+            lv_image_decoder_dsc_t decoder;
+            assert(lv_image_decoder_open(&decoder,image,NULL)==LV_RESULT_OK);
+            lv_area_t full={5,(int32_t)rows[j],227,(int32_t)rows[j]};
+            lv_area_t area={LV_COORD_MIN,LV_COORD_MIN,LV_COORD_MIN,LV_COORD_MIN};
+            assert(lv_image_decoder_get_area(&decoder,&full,&area)==LV_RESULT_OK);
+            const uint8_t *indices=image->data+WHALE_SEASON_PIXEL_OFFSET+
+                (source_height-1-rows[j]/scale)*source_width;
+            const uint16_t *actual=(const uint16_t *)decoder.decoded->data;
+            for(unsigned x=5;x<=227;x++) {
+                const uint8_t *p=image->data+WHALE_SEASON_PALETTE_OFFSET+4*indices[x/scale];
+                uint16_t expected=(uint16_t)((p[2]>>3)<<11 | (p[1]>>2)<<5 | p[0]>>3);
+                assert(actual[x-5]==expected);
+            }
+            lv_image_decoder_close(&decoder);
+        }
+    }
+}
 static void check_portrait_decoding(online_theme_t theme) {
     for(unsigned frame=0;frame<ONLINE_AVATAR_COUNT;frame++) {
         const lv_image_dsc_t *source=whale_avatar_view_source(theme,(online_avatar_t)frame);
@@ -162,6 +216,7 @@ int main(void) {
     lv_init();assert(lv_display_create(240,320));fixture.volume=75;fixture.audio_ok=true;fixture.overlay=true;fixture.cues=true;
     check_icon_flash_sources();
     online_ui_enter(true);
+    check_foreground_decoding();check_preset_backgrounds();
     assert(!whale_avatar_view_source((online_theme_t)1,ONLINE_AVATAR_IDLE));
     assert(!whale_avatar_view_source(ONLINE_THEME_COUNT,ONLINE_AVATAR_IDLE));
     const char *messages[]={"DSH-Voice-1234","正在连接后端","确定：开始对话","我在认真听","正在请教 Agent","DSH","后端消息过大或分片无效"};
@@ -212,11 +267,16 @@ int main(void) {
     }
     fixture.phase=ONLINE_READY;fixture.linked=true;fixture.mic=false;refresh(NULL);
     assert(!*lv_label_get_text(title) && link_icon.value);
+    assert(!lv_obj_has_flag(home_foreground_top_obj,LV_OBJ_FLAG_HIDDEN));
+    assert(!lv_obj_has_flag(home_foreground_bottom_obj,LV_OBJ_FLAG_HIDDEN));
+    assert(lv_obj_has_flag(phase_icon.obj,LV_OBJ_FLAG_HIDDEN));
     fixture.mic=true;refresh(NULL);assert(!*lv_label_get_text(title) && action_mic.value);
+    assert(!lv_obj_has_flag(phase_icon.obj,LV_OBJ_FLAG_HIDDEN) && phase_icon.kind==UI_LISTEN);
     fixture.linked=false;refresh(NULL);assert(strstr(lv_label_get_text(title),"后端"));
     fixture.theme=ONLINE_THEME_WHALE;fixture.phase=ONLINE_LISTENING;fixture.mic=true;fixture.linked=true;fixture.feedback_visible=true;
     snprintf(fixture.message,sizeof(fixture.message),"%s",online_error_text("passport-no-speech"));refresh(NULL);snap("recognition-error");
     assert(!strcmp(lv_label_get_text(title),fixture.message));
+    assert(lv_obj_has_flag(phase_icon.obj,LV_OBJ_FLAG_HIDDEN));
     fixture.phase=ONLINE_THINKING;
     snprintf(fixture.message,sizeof(fixture.message),"耗时较长，按下键可取消");refresh(NULL);snap("recognition-slow");
     fixture.feedback_visible=false;
@@ -227,6 +287,7 @@ int main(void) {
         assert(online_feedback_progress(&progress_state,"turn",progress[i],i*100));
         fixture.progress=progress_state.phase;refresh(NULL);
         assert(!strcmp(lv_label_get_text(title),progress_state.phase));
+        assert(lv_obj_has_flag(phase_icon.obj,LV_OBJ_FLAG_HIDDEN));
         if(i==0)snap("capture-progress");
     }
     fixture.feedback_visible=true;refresh(NULL);
@@ -236,6 +297,7 @@ int main(void) {
     fixture.progress=progress_state.phase;refresh(NULL);
     assert(!fixture.progress && !*lv_label_get_text(title) && action_mic.value);
     fixture.phase=ONLINE_THINKING;
+    refresh(NULL);assert(!lv_obj_has_flag(phase_icon.obj,LV_OBJ_FLAG_HIDDEN) && phase_icon.kind==UI_THINKING);
     uint32_t thinking_hashes[3]={0};
     for(unsigned i=0;i<32;i++) {
         clock_us=(int64_t)i*100000;refresh(NULL);
@@ -293,6 +355,8 @@ int main(void) {
     online_ui_key(BSP_BTN_OK,BSP_BTN_PRESS);refresh(NULL);
     online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);
     assert(menu.page==ONLINE_SETTINGS);
+    assert(lv_obj_is_visible(background_image));
+    assert(lv_image_get_src(background_image)==online_background_image(custom_data));
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);assert(menu.selected==ONLINE_DISPLAY_BACKGROUND);
     snap("custom-settings-offline");
@@ -390,6 +454,8 @@ int main(void) {
     fixture.feedback_visible=false;fixture.message[0]=0;
     online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);assert(setups==0);
     snap("settings-root");
+    assert(lv_obj_is_visible(background_image));
+    assert(lv_image_get_src(background_image)==whale_backgrounds[fixture.background]);
     assert(lv_obj_has_flag(configuration,LV_OBJ_FLAG_HIDDEN));
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_PRESS);online_ui_key(BSP_BTN_DOWN,BSP_BTN_RELEASE);
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
@@ -452,6 +518,7 @@ int main(void) {
         assert(menu.page==ONLINE_DISPLAY && menu.selected==ONLINE_DISPLAY_BACKGROUND);
     }
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(fixture.background==ONLINE_BACKGROUND_OFF);
+    assert(lv_obj_has_flag(background_image,LV_OBJ_FLAG_HIDDEN));
     assert(strstr(lv_label_get_text(lv_obj_get_child(settings_choices[ONLINE_DISPLAY_BACKGROUND],0)),"关闭"));
     snap("settings-background-off");
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(fixture.background==ONLINE_BACKGROUND_DAY);
@@ -476,6 +543,8 @@ int main(void) {
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(menu.page==ONLINE_SETTINGS);
     online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);
     assert(lv_obj_has_flag(header,LV_OBJ_FLAG_HIDDEN) && lv_obj_has_flag(home_controls,LV_OBJ_FLAG_HIDDEN));
+    assert(lv_obj_has_flag(home_foreground_top_obj,LV_OBJ_FLAG_HIDDEN));
+    assert(lv_obj_has_flag(home_foreground_bottom_obj,LV_OBJ_FLAG_HIDDEN));
     assert(lv_obj_has_flag(title,LV_OBJ_FLAG_HIDDEN) && !lv_anim_get(title,NULL));snap("home-clean");
     online_ui_key(BSP_BTN_UP,BSP_BTN_PRESS);online_ui_key(BSP_BTN_UP,BSP_BTN_LONG);refresh(NULL);
     assert(fixture.overlay && menu.page==ONLINE_HOME);

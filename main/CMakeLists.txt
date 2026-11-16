@@ -4,6 +4,7 @@ idf_component_register(
          "online_background_format.c" "online_background_image.c" "whale_avatar_view.c" "fap_screenshot.c"
          "../assets/characters/whale_avatar.c" "../assets/characters/whale_maid_avatar.c" "../assets/characters/claude_avatar.c"
          "../assets/backgrounds/whale_backgrounds.c"
+         "../assets/ui/home_foreground.c"
          "../assets/fonts/mouthy_bean_zh_12.c" "../assets/fonts/mouthy_bean_zh_16.c"
     INCLUDE_DIRS "."
     EMBED_TXTFILES "setup-page.html" "appearance-page.html" "background-image.js"

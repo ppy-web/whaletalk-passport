@@ -18,8 +18,8 @@
   [角色生成记录](../assets/characters/generation.json)。
 - `assets/characters/*_avatar.c`：三套图集生成的 Flash 数据，每套六帧；源 PNG 不打包进固件。
 - `assets/backgrounds/*-source.png`：2026-11-05 内置 `imagegen` 生成的「晴海茶室」「星夜鲸梦」高清原图。
-- `assets/backgrounds/seaside-tea.png`、`moonlit-dream.png`：240×320 PNG，供配置网页预览。
-- `assets/backgrounds/whale_backgrounds.c`：晴海、星夜使用 240×320 RGB565（共 307,200 字节）。
+- `assets/backgrounds/seaside-tea.png`、`moonlit-dream.png`：240×320、256 色 PNG，供配置网页预览。
+- `assets/backgrounds/whale_backgrounds.c`：晴海、星夜使用 240×320、256 色 BMP（共 155,756 字节）。
   四季预置图从示例 PNG 转成 120×160、256 色 BMP（共 81,112 字节），手机预览与设备共用这份 Flash 数据。
   设备从每行的像素索引生成 RGB565，与自定义背景共用 480 字节行缓冲。
 - [生成记录与提示词](../assets/backgrounds/generation.json)：两套背景及透明图集的生成工具、输入输出和完整提示词。
@@ -63,3 +63,5 @@ LVGL 临时图像分配失败并停在断言循环的故障，表现为停留「
 ## 原不透明图集提示词（2026-11-03，内置 imagegen）
 
 Use case: identity-preserve. Create ONE production expression sprite ATLAS for a tiny 240x320 ESP32 voice companion screen, based on the reference character. Output a landscape image, ideally 1536x1024 pixels, with EXACTLY THREE COLUMNS and TWO ROWS of equal SQUARE cells, cells touching edge-to-edge, NO outer margins, NO grid lines. Each cell contains the SAME blue-haired chibi whale maid's front-facing BUST portrait down to her upper chest. Preserve reference identity: large sapphire blue eyes, rich blue flowing hair and curled forelock, white maid headband, navy-and-white maid outfit and bow, cyan whale-fin headphones. Simplify intricate clothing and highlights into clean polished anime cel shading and bold readable silhouettes for a 192x192 sprite. In EVERY cell keep identical camera, scale, framing, hair/headphone/torso position: full headband and curl inside the cell, generous 6% clear space around the silhouette, face prominent. Hands outside frame. Background in ALL cells is EXACTLY one flat opaque pale icy blue #E7F0FF, absolutely no gradients, shadows, textures or halos. Six expressions in exact reading order: top-left friendly idle, eyes open and small CLOSED-mouth smile; top-middle attentive listening, eyes open focused with slightly raised eyebrows and closed mouth; top-right thoughtful, eyes glance upward and small pursed closed mouth; bottom-left speaking, bright eyes and friendly OPEN mouth; bottom-middle blink, BOTH eyes gently CLOSED and closed-mouth smile; bottom-right mild concern/error, worried eyebrows and small closed-mouth frown, no tears. These are animation frames of one character, not six redesigned characters. NO text, labels, symbols, bubbles, UI controls, frames, watermarks or extra characters. Deliver only the single six-cell sprite atlas.
+
+首页透明前景 `assets/ui/home-foreground.png` 由内置图像生成工具参考鲸语封面与首页风格生成；`tools/compile_home_foreground.py` 将上下边缘转换为与角色共用的调色板及逐行压缩格式，由同一解码器逐行输出 RGB565+A8。预览为 LVGL 合成状态，并非设备截图。

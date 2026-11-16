@@ -1,0 +1,9 @@
+{
+  "asset": "home-foreground.png",
+  "tool": "OpenAI built-in image generation",
+  "date": "2026-11-16",
+  "purpose": "Transparent ocean-themed home foreground; the middle remains transparent for the active character and background.",
+  "references": ["WhaleTalk community cover illustration", "LVGL synthetic home preview"],
+  "prompt": "Create a transparent portrait 3:4 foreground overlay in the project's blue glass, ocean foam, white flowers, shell and ribbon style. Keep the middle completely transparent. Use a thin translucent pale-blue band with sparse details at the outer corners at the top, and a gently curved translucent aqua wave and small shell at the bottom. Leave clear space for live status icons. Draw no character, text, icons, buttons, watermark or screen border.",
+  "build": "tools/compile_home_foreground.py downsamples the source and encodes two edge regions in the shared RGB565/A8 palette and row format."
+}

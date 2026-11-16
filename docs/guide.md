@@ -21,13 +21,13 @@ push-to-talk feedback take priority. To its left, joined/broken chain links show
 connection. The battery at the right
 fills with its measured charge, turns red at 15% or below, and shows a dash when
 unknown. Normal listening, thinking and speech use a waveform, three dots and a
-speaker alongside the character; connection and error details remain readable.
-The three bottom groups map UP to volume, OK to the microphone, and DOWN to
-cancel. The bottom microphone icon shows a slash when disabled.
-Five volume bars represent 25, 50, 75, 90 and 100%; a crossed speaker is
-muted. Inactive volume bars are shown faintly. Each gesture hint has a rounded
-border and at most two icons; volume bars are integrated into the speaker
-indicator. The home screen omits the hold-OK hint; holding OK still opens settings.
+speaker at the top center; detailed progress and errors take priority. A translucent
+ocean-themed foreground frames the screen; settings reuse the selected background
+under a light tint for readability. At the bottom, the volume and microphone
+icons show their current states: a slash means the microphone is off and a crossed
+speaker means muted. Five volume bars represent 25, 50, 75, 90 and 100%, with
+inactive bars shown faintly. Physical buttons retain their actions, and holding OK
+still opens settings.
 
 | Button | Home action |
 | --- | --- |
