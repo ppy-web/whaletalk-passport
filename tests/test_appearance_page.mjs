@@ -7,7 +7,7 @@ const script=html.match(/<script>([\s\S]*?)<\/script>/)[1];
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function page({offline=false,background=0}={}){
   const elements=new Map(),calls=[],revoked=[];
-  for(const [,id] of html.matchAll(/\bid="([^"]+)"/g))elements.set(id,{disabled:['upload','apply','file'].includes(id),style:{},files:[],textContent:''});
+  for(const [,id] of html.matchAll(/\bid="([^"]+)"/g))elements.set(id,{disabled:['addImage','apply','file'].includes(id),style:{},files:[],textContent:''});
   const radios=Array.from(html.matchAll(/<input type="radio" name="background" value="(\d+)"(?: data-preview="([^"]+)")?[^>]*>/g),
     ([,value,preview])=>({value,checked:value==='0',disabled:value==='2',dataset:{preview}}));
   const radio=n=>radios.find(r=>r.value===String(n));
@@ -33,34 +33,37 @@ function page({offline=false,background=0}={}){
     choose:async(type='image/png',size=1024)=>{el('file').files=[{type,size}];await el('file').onchange()}};
 }
 test('no nonce keeps writes disabled and handlers do not send requests',async()=>{
-  const p=page({offline:true});await tick();assert.equal(p.el('apply').disabled,true);assert.equal(p.el('upload').disabled,true);
-  await p.el('apply').onclick();await p.el('upload').onclick();assert.equal(p.calls.length,1);
+  const p=page({offline:true});await tick();assert.equal(p.el('apply').disabled,true);assert.equal(p.el('addImage').disabled,true);
+  await p.el('apply').onclick();await p.choose();assert.equal(p.calls.length,1);
 });
-test('prepared image must upload, failed uploads retry, save failure retries without credentials',async()=>{
-  const p=page();await tick();await p.choose();assert.equal(p.el('apply').disabled,true);assert.equal(p.el('upload').disabled,false);
-  await p.el('apply').onclick();assert.equal(p.calls.filter(c=>c.url==='/background/apply').length,0);
-  p.setUpload(async()=>({ok:false,text:async()=> 'full'}));await p.el('upload').onclick();assert.equal(p.el('upload').disabled,false);assert.equal(p.radio(2).disabled,true);
-  p.setUpload(async()=>({ok:true,text:async()=> 'uploaded'}));await p.el('upload').onclick();
+test('selection uploads automatically, failures can retry and save failure can retry',async()=>{
+  const p=page();await tick();
+  p.setUpload(async()=>({ok:false,text:async()=> 'full'}));await p.choose();
+  assert.equal(p.calls.filter(c=>c.url==='/background/upload').length,1);
+  assert.equal(p.radio(2).disabled,true);assert.equal(p.el('addImage').disabled,false);assert.equal(p.el('apply').disabled,false);
+  assert.match(p.el('status').textContent,/重新选择图片/);
+  p.setUpload(async()=>({ok:true,text:async()=> 'uploaded'}));await p.choose();
   const request=p.calls.at(-1);assert.equal(request.options.body.length,6184);assert.equal(request.options.headers['X-Setup-Nonce'],'test-nonce');
-  assert.equal(p.radio(2).checked,true);assert.equal(p.el('apply').disabled,false);assert.equal(p.el('upload').disabled,true);
+  assert.equal(p.radio(2).checked,true);assert.equal(p.el('apply').disabled,false);
   p.setApply(async()=>({ok:false,text:async()=> 'retry'}));await p.el('apply').onclick();assert.equal(p.el('apply').disabled,false);
   const body=JSON.parse(p.calls.at(-1).options.body);assert.deepEqual(body,{background:2});
   p.setApply(async()=>({ok:true,text:async()=> 'saved'}));await p.el('apply').onclick();assert.equal(p.el('apply').disabled,true);
 });
-test('switching back to a built-in discards an unuploaded draft',async()=>{
-  const p=page();await tick();await p.choose();p.radios.forEach(r=>r.checked=r.value==='1');p.radio(1).onchange();
-  assert.equal(p.el('apply').disabled,false);assert.equal(p.el('upload').disabled,true);assert.equal(p.el('preview').src,'/background-night.png');
-  await p.el('apply').onclick();assert.deepEqual(JSON.parse(p.calls.at(-1).options.body),{background:1});
+test('saving and changing files are disabled while an upload is in flight',async()=>{
+  const p=page();await tick();let finish;p.setUpload(()=>new Promise(resolve=>finish=resolve));
+  const selecting=p.choose();await tick();assert.equal(p.el('apply').disabled,true);assert.equal(p.el('addImage').disabled,true);
+  await p.el('apply').onclick();assert(!p.calls.some(c=>c.url==='/background/apply'));
+  finish({ok:true,text:async()=> 'uploaded'});await selecting;assert.equal(p.el('apply').disabled,false);
 });
 test('image decode races and file cancellation release URLs and preserve latest selection',async()=>{
   const p=page();await tick();let first;p.setDecode(()=>new Promise(resolve=>first=resolve));
   const early=p.choose();await tick();p.radios.forEach(r=>r.checked=r.value==='1');p.radio(1).onchange();first();await early;
-  assert.equal(p.el('preview').src,'/background-night.png');assert.equal(p.el('upload').disabled,true);assert.equal(p.revoked.length,1);
-  p.setDecode(async()=>{});await p.choose();p.el('file').files=[];await p.el('file').onchange();assert.equal(p.el('upload').disabled,true);assert.equal(p.el('apply').disabled,false);
+  assert.equal(p.el('preview').src,'/background-night.png');assert(!p.calls.some(c=>c.url==='/background/upload'));assert.equal(p.revoked.length,1);
+  p.setDecode(async()=>{});await p.choose();p.el('file').files=[];await p.el('file').onchange();assert.equal(p.el('apply').disabled,false);
 });
 test('oversized files, unsupported formats and failed decoding cannot upload',async()=>{
-  const p=page();await tick();for(const [type,size] of [['image/png',9*1024*1024],['image/svg+xml',100]]){await p.choose(type,size);assert.equal(p.el('upload').disabled,true)}
-  p.setDecode(async()=>{throw Error('decode failed')});await p.choose();assert.equal(p.el('upload').disabled,true);assert.equal(p.revoked.length,1);
+  const p=page();await tick();for(const [type,size] of [['image/png',9*1024*1024],['image/svg+xml',100]]){await p.choose(type,size);assert(!p.calls.some(c=>c.url==='/background/upload'))}
+  p.setDecode(async()=>{throw Error('decode failed')});await p.choose();assert(!p.calls.some(c=>c.url==='/background/upload'));assert.equal(p.revoked.length,1);
 });
 
 test('off preference loads, previews and saves without discarding custom data',async()=>{

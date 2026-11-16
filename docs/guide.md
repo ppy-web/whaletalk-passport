@@ -10,11 +10,9 @@ required. The computer must keep DSH running.
 ## Hardware and interface
 
 ESP32-C3, 8 MB Flash, no PSRAM, 240×320 screen, ES8311 audio and three buttons.
-The app uses the official BSP and adapts Qwen Voice Bean's expressive face and
-conversation flow. Its on-device name is 鲸语. It defaults to Whale Girl. Mint
-Face, Whale Girl 2 and Claude are also available. All four share setup,
+The app uses the official BSP and adapts Qwen Voice Bean's conversation flow. Its on-device name is 鲸语. It defaults to Big Fat Fish (大肥鱼). Whale Girl (鲸鱼娘) and Claude are also available. A Background Only option hides the character and displays the selected background, including custom uploads. All options share setup,
 connection, ready, listening, thinking, speaking, error and settings screens.
-Main labels use 16px fonts, home status uses 12px and the provisioning address uses 20px. Chinese labels use compiled font subsets; arbitrary
+Main labels and home status use 16px fonts and the provisioning address uses 20px. Chinese labels use compiled font subsets; arbitrary
 model-response transcripts are not displayed.
 
 The home status line shows connection progress, recording, conversation progress
@@ -91,7 +89,7 @@ saved connection information. Connect a phone to `DSH-Voice-*`, open
 `http://192.168.4.1`, then select the top 自定义背景 tab. The 连接鲸语 tab returns to network setup. Choose a built-in, turn the background off, or upload JPG, PNG
 or WebP (up to 8 MB and 24 megapixels). The browser center-crops to 3:4 and
 quantizes to 96×128 with 16 colors, showing the converted result. Uploads are
-exactly 6,184 bytes. Upload first, then save/restart; no Wi-Fi password or pairing
+exactly 6,184 bytes. Select the plus button beside the preview to choose a file and upload it automatically, then save/restart; no Wi-Fi password or pairing
 code is needed again. The device retains the encoded data and renders with a
 480-byte scanline rather than expanding/scaling a full RGB565 image. The existing
 `dsh_voice` NVS namespace stores the image;
@@ -149,7 +147,7 @@ speaker completion is acknowledged. No automatic voice interruption or acoustic
 echo cancellation is provided. Handle tool approvals in DSH.
 
 Hold OK, open System settings (系统设置), and briefly press OK on Interface (界面)
-to cycle Whale Girl → Mint Face → Whale Girl 2 → Claude. Hold OK again to return home. The choice
+to cycle Big Fat Fish → Whale Girl → Claude → Background Only. Hold OK again to return home. The choice
 survives restart without changing Wi-Fi, pairing or the conversation. Saving is
 deferred during speech/thinking, and a failed save is shown in settings. Each
 portrait has idle, listening, thinking, speaking, blink and error expressions.

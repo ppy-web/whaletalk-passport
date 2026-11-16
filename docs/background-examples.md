@@ -10,7 +10,7 @@
 
 | 名称 | 风格与搭配 | 单张图片 |
 | --- | --- | --- |
-| 薄荷素底 | 接近纯色的浅薄荷绿，适合薄荷表情，也可衬托鲸鱼娘 | [mint-solid.png](../assets/backgrounds/examples/mint-solid.png) |
+| 薄荷素底 | 接近纯色的浅薄荷绿，适合衬托鲸鱼娘 | [mint-solid.png](../assets/backgrounds/examples/mint-solid.png) |
 | 鲸湾拱廊 | 浅蓝海湾、白色拱廊与贝壳，适合鲸鱼娘 | [whale-lagoon.png](../assets/backgrounds/examples/whale-lagoon.png) |
 | 静海弯月 | 深蓝夜海与稀疏星月，适合夜间氛围 | [night-moon.png](../assets/backgrounds/examples/night-moon.png) |
 | 春日樱庭 | 预置。淡粉樱花与浅绿庭院 | [spring-sakura.png](../assets/backgrounds/examples/spring-sakura.png) |
@@ -24,7 +24,7 @@
 1. 点击上表中的单张 PNG。若在 GitHub 浏览，打开图片后点击 **Download raw file**，或进入 Raw 原图再保存；手机可在原图上长按保存。请下载单张 PNG，不要保存总览图或网页截图。
 2. 在设备上长按 OK 进入设置，选择「上传背景」并按 OK。设备会重启进入配置热点，当前语音中断，已保存的连接配置保留。
 3. 手机连接 `DSH-Voice-*`，打开 `http://192.168.4.1`，切换到「自定义背景」页签。
-4. 选择下载的 PNG，检查网页转换后的预览，点击「上传这张图片」，再点击「保存背景并重启」。无需重新填写 Wi-Fi 或配对码。
+4. 点击预览右侧的加号选择下载的 PNG，图片会自动上传；检查转换后的预览，再点击「保存背景并重启」。无需重新填写 Wi-Fi 或配对码。
 5. 重启后可在设备设置的「背景」项切换内置图和自定义图。再次上传会替换当前自定义图片；设备仅保存一张自定义背景。
 
 ## 自己准备图片
