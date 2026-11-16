@@ -1,7 +1,7 @@
 # 鲸语角色与背景素材
 
-设备内应用名为「鲸语」，仓库名保持 WhaleTalk Passport。默认鲸鱼娘。
-长按 OK，进入「系统设置 → 界面」后短按 OK，按鲸鱼娘、薄荷表情、鲸鱼娘2、Claude 的顺序切换。
+设备内应用名为「鲸语」，仓库名保持 WhaleTalk Passport。默认大肥鱼。
+长按 OK，进入「系统设置 → 界面」后短按 OK，按大肥鱼、鲸鱼娘、Claude、仅背景的顺序切换。
 长按 OK 返回首页。外观选择使用原有的 `dsh_voice/theme`，兼容已保存的旧选项，不重写连接配置。
 
 ## 文件与来源
@@ -12,7 +12,7 @@
 - `assets/characters/whale-girl-transparent-atlas.png`：与当前图集相同的 RGBA 数据，也是编译脚本使用的输入。
 - `assets/characters/whale-girl-front-atlas-v2-alpha.png`：2026-11-05 使用内置 `imagegen` 编辑的最终双侧耳机、腰部延展与渐隐原图；[完整编辑记录与提示词](../assets/characters/generation.json)。
 - `assets/characters/history/`：旧版正面图集及未采用的中间稿，仅作素材来源记录，不参与构建；原始侧身参考图保留在原路径。
-- [鲸鱼娘2 图集](../assets/characters/whale-maid-atlas.png)及 [Claude 图集](../assets/characters/claude-atlas.png)：
+- [鲸鱼娘图集](../assets/characters/whale-maid-atlas.png)及 [Claude 图集](../assets/characters/claude-atlas.png)：
   2026-11-14 用内置 imagegen 分别基于用户的 `鲸鱼娘2.jpg` 和 `Claude.jpg` 生成。
   每套保持同一角色构图，按待机、聆听、思考、说话、眨眼、错误排列。完整提示词及参考图哈希见
   [角色生成记录](../assets/characters/generation.json)。

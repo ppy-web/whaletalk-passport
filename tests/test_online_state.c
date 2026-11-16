@@ -280,11 +280,11 @@ int main(void) {
     online_menu_key(&menu,ONLINE_KEY_OK);online_menu_key(&menu,ONLINE_KEY_LONG);
     assert(menu.page==ONLINE_HOME);
     assert(online_theme_normalize(255)==ONLINE_THEME_WHALE);
-    assert(online_theme_normalize(ONLINE_THEME_MINT)==ONLINE_THEME_MINT);
-    assert(online_theme_next(ONLINE_THEME_WHALE)==ONLINE_THEME_MINT);
-    assert(online_theme_next(ONLINE_THEME_MINT)==ONLINE_THEME_WHALE_MAID);
+    assert(online_theme_normalize(1)==ONLINE_THEME_WHALE);
+    assert(online_theme_next(ONLINE_THEME_WHALE)==ONLINE_THEME_WHALE_MAID);
     assert(online_theme_next(ONLINE_THEME_WHALE_MAID)==ONLINE_THEME_CLAUDE);
-    assert(online_theme_next(ONLINE_THEME_CLAUDE)==ONLINE_THEME_WHALE);
+    assert(online_theme_next(ONLINE_THEME_CLAUDE)==ONLINE_THEME_BACKGROUND_ONLY);
+    assert(online_theme_next(ONLINE_THEME_BACKGROUND_ONLY)==ONLINE_THEME_WHALE);
     assert(online_background_normalize(255)==ONLINE_BACKGROUND_DAY);
     assert(online_background_next(ONLINE_BACKGROUND_DAY,false)==ONLINE_BACKGROUND_NIGHT);
     assert(online_background_next(ONLINE_BACKGROUND_NIGHT,false)==ONLINE_BACKGROUND_SPRING);

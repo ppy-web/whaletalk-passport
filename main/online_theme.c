@@ -101,7 +101,7 @@ online_theme_t online_theme_load(void) {
 }
 
 bool online_theme_save(online_theme_t theme) {
-    if((unsigned)theme>=ONLINE_THEME_COUNT)return false;
+    if(online_theme_normalize((unsigned)theme)!=theme)return false;
     nvs_handle_t handle;
     if(nvs_open("dsh_voice",NVS_READWRITE,&handle)!=ESP_OK)return false;
     esp_err_t result=nvs_set_u8(handle,"theme",(uint8_t)theme);

@@ -6,8 +6,9 @@
 typedef enum { ONLINE_SETUP, ONLINE_CONNECTING, ONLINE_READY, ONLINE_LISTENING,
     ONLINE_THINKING, ONLINE_SPEAKING, ONLINE_ERROR } online_phase_t;
 /* Stored as dsh_voice/theme; keep the original values when adding options. */
+/* Stored value 1 belonged to the removed theme; keep remaining IDs stable. */
 typedef enum {
-    ONLINE_THEME_WHALE=0, ONLINE_THEME_MINT=1, ONLINE_THEME_WHALE_MAID=2, ONLINE_THEME_CLAUDE=3,
+    ONLINE_THEME_WHALE=0, ONLINE_THEME_WHALE_MAID=2, ONLINE_THEME_CLAUDE=3, ONLINE_THEME_BACKGROUND_ONLY=4,
     ONLINE_THEME_COUNT
 } online_theme_t;
 online_theme_t online_theme_normalize(unsigned stored);

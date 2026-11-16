@@ -117,8 +117,8 @@ static void snap(const char *name){
     fclose(f);lv_draw_buf_destroy(b);
 }
 static const char *const theme_names[ONLINE_THEME_COUNT]={
-    [ONLINE_THEME_WHALE]="whale",[ONLINE_THEME_MINT]="mint",
-    [ONLINE_THEME_WHALE_MAID]="whale-maid",[ONLINE_THEME_CLAUDE]="claude",
+    [ONLINE_THEME_WHALE]="whale",
+    [ONLINE_THEME_WHALE_MAID]="whale-maid",[ONLINE_THEME_CLAUDE]="claude",[ONLINE_THEME_BACKGROUND_ONLY]="background-only",
 };
 static void check_portrait_decoding(online_theme_t theme) {
     for(unsigned frame=0;frame<ONLINE_AVATAR_COUNT;frame++) {
@@ -162,14 +162,16 @@ int main(void) {
     lv_init();assert(lv_display_create(240,320));fixture.volume=75;fixture.audio_ok=true;fixture.overlay=true;fixture.cues=true;
     check_icon_flash_sources();
     online_ui_enter(true);
-    assert(!whale_avatar_view_source(ONLINE_THEME_MINT,ONLINE_AVATAR_IDLE));
+    assert(!whale_avatar_view_source((online_theme_t)1,ONLINE_AVATAR_IDLE));
     assert(!whale_avatar_view_source(ONLINE_THEME_COUNT,ONLINE_AVATAR_IDLE));
     const char *messages[]={"DSH-Voice-1234","正在连接后端","确定：开始对话","我在认真听","正在请教 Agent","DSH","后端消息过大或分片无效"};
     const char *names[]={"setup","connecting","ready","listening","thinking","speaking","error"};
     uint32_t idle_hashes[ONLINE_THEME_COUNT]={0};
-    for(unsigned theme=0;theme<ONLINE_THEME_COUNT;theme++) {
+    const online_theme_t available_themes[]={ONLINE_THEME_WHALE,ONLINE_THEME_WHALE_MAID,ONLINE_THEME_CLAUDE,ONLINE_THEME_BACKGROUND_ONLY};
+    for(unsigned t=0;t<sizeof(available_themes)/sizeof(available_themes[0]);t++) {
+        unsigned theme=available_themes[t];
         fixture.theme=online_theme_normalize(theme);
-        bool portrait=theme!=ONLINE_THEME_MINT;
+        bool portrait=theme!=ONLINE_THEME_BACKGROUND_ONLY;
         uint32_t expressions[ONLINE_AVATAR_COUNT]={0};
         if(portrait)check_portrait_decoding(fixture.theme);
         for(unsigned i=0;i<7;i++){
@@ -179,7 +181,6 @@ int main(void) {
             snprintf(fixture.message,sizeof(fixture.message),"%s",messages[i]);refresh(NULL);
             char name[48];snprintf(name,sizeof(name),"%s-%s",theme_names[theme],names[i]);snap(name);
             assert(lv_obj_has_flag(portrait_layer,LV_OBJ_FLAG_HIDDEN)==(i==ONLINE_SETUP || !portrait));
-            assert(lv_obj_has_flag(face_layer,LV_OBJ_FLAG_HIDDEN)==(i==ONLINE_SETUP || theme!=ONLINE_THEME_MINT));
             if(portrait && i>=ONLINE_READY) {
                 const online_avatar_t frames[]={ONLINE_AVATAR_IDLE,ONLINE_AVATAR_LISTENING,ONLINE_AVATAR_THINKING,
                     ONLINE_AVATAR_SPEAKING,ONLINE_AVATAR_ERROR};
@@ -251,8 +252,6 @@ int main(void) {
     assert(cancels==cancelled_while_thinking+1 && fixture.phase==ONLINE_THINKING);
     fixture.background=ONLINE_BACKGROUND_OFF;refresh(NULL);
     assert(lv_obj_has_flag(background_image,LV_OBJ_FLAG_HIDDEN));snap("background-off-whale");
-    fixture.theme=ONLINE_THEME_MINT;refresh(NULL);snap("background-off-mint");
-    assert(!lv_obj_has_flag(face_layer,LV_OBJ_FLAG_HIDDEN));
     fixture.theme=ONLINE_THEME_CLAUDE;refresh(NULL);snap("claude-off");
     fixture.theme=ONLINE_THEME_WHALE;fixture.background=ONLINE_BACKGROUND_NIGHT;refresh(NULL);
     assert(!lv_obj_has_flag(background_image,LV_OBJ_FLAG_HIDDEN));snap("background-night");
@@ -263,7 +262,9 @@ int main(void) {
     const uint8_t bg_header[]={'W','T','B','G',1,96,128,16};memcpy(custom_data,bg_header,sizeof(bg_header));
     custom_data[8]=0xff;custom_data[9]=0xcf;custom_data[10]=0x1f;custom_data[11]=0xf7;
     for(unsigned i=0;i<ONLINE_BG_PIXELS/2;i++)custom_data[40+i]=i%48<24?0x00:0x11;
-    refresh(NULL);snap("background-custom");
+    fixture.theme=ONLINE_THEME_BACKGROUND_ONLY;refresh(NULL);snap("background-only-custom");
+    assert(lv_obj_has_flag(portrait_layer,LV_OBJ_FLAG_HIDDEN) && !lv_obj_has_flag(background_image,LV_OBJ_FLAG_HIDDEN));
+    fixture.theme=ONLINE_THEME_WHALE;refresh(NULL);snap("background-custom");
     custom_data[8]=0;custom_data[9]=0;custom_data[10]=0x82;custom_data[11]=0x08;
     refresh(NULL);snap("background-custom-dark");
     fixture.theme=ONLINE_THEME_WHALE_MAID;refresh(NULL);snap("whale-maid-custom-dark");
@@ -406,10 +407,10 @@ int main(void) {
     online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);refresh(NULL);
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(menu.page==ONLINE_DISPLAY);
     assert(fixture.theme==ONLINE_THEME_WHALE && fixture.phase==ONLINE_READY && !fixture.mic);
-    const online_theme_t choices[]={ONLINE_THEME_MINT,ONLINE_THEME_WHALE_MAID,ONLINE_THEME_CLAUDE,ONLINE_THEME_WHALE};
-    const char *labels[]={"薄荷表情","鲸鱼娘2","Claude","鲸鱼娘"};
+    const online_theme_t choices[]={ONLINE_THEME_WHALE_MAID,ONLINE_THEME_CLAUDE,ONLINE_THEME_BACKGROUND_ONLY,ONLINE_THEME_WHALE};
+    const char *labels[]={"鲸鱼娘","Claude","仅背景","大肥鱼"};
     online_background_t background_before_switch=fixture.background;
-    for(unsigned i=0;i<ONLINE_THEME_COUNT;i++) {
+    for(unsigned i=0;i<sizeof(choices)/sizeof(choices[0]);i++) {
         online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);
         assert(themes==i+1 && fixture.theme==choices[i]);
         assert(fixture.background==background_before_switch);
@@ -420,7 +421,7 @@ int main(void) {
         /* Keep the idle expression across a real settings/home round trip. */
         online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);
         assert(menu.page==ONLINE_HOME);
-        if(choices[i]==ONLINE_THEME_MINT)assert(lv_obj_is_visible(face_layer));
+        if(choices[i]==ONLINE_THEME_BACKGROUND_ONLY)assert(lv_obj_has_flag(portrait_layer,LV_OBJ_FLAG_HIDDEN));
         else assert(object_render_hash(portrait_layer)==idle_hashes[choices[i]]);
         online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);
         online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);
@@ -499,7 +500,6 @@ int main(void) {
     uint32_t settled=object_render_hash(sound_card);
     assert(lifted!=settled && !lv_anim_get(sound_card,draw_bounce));
     refresh(NULL);assert(object_render_hash(sound_card)==settled);
-    fixture.theme=ONLINE_THEME_MINT;refresh(NULL);snap("mint-settings-grid");
     online_ui_key(BSP_BTN_UP,BSP_BTN_PRESS);online_ui_key(BSP_BTN_UP,BSP_BTN_LONG);refresh(NULL);
     online_ui_key(BSP_BTN_UP,BSP_BTN_RELEASE);online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);refresh(NULL);
     assert(menu.selected==ONLINE_MENU_DISPLAY && !fixture.overlay);
@@ -517,12 +517,6 @@ int main(void) {
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(menu.page==ONLINE_SETTINGS);
     online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);
-    fixture.theme=ONLINE_THEME_MINT;fixture.phase=ONLINE_LISTENING;fixture.mic=true;refresh(NULL);
-    assert(!lv_obj_has_flag(ears[0],LV_OBJ_FLAG_HIDDEN));
-    fixture.phase=ONLINE_SPEAKING;fixture.level=1000;refresh(NULL);check();int y=lv_obj_get_height(mouth);
-    clock_us+=5000000;fixture.level=19000;refresh(NULL);check();
-    assert(lv_obj_get_height(mouth)>y);
-    assert(lv_obj_has_flag(ears[0],LV_OBJ_FLAG_HIDDEN));
     /* Standby preserves the desired mic, while runtime pauses actual input. */
     menu.page=ONLINE_HOME;fixture.phase=ONLINE_LISTENING;fixture.mic=true;
     refresh(NULL);clock_us+=60000000;refresh(NULL);

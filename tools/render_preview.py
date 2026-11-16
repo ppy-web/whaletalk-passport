@@ -8,7 +8,7 @@ for path in root.glob('*.ppm'):
     with Image.open(path) as frame:
         frame.save(path.with_suffix('.png'))
 
-states = ('whale-ready', 'mint-ready', 'whale-maid-ready', 'claude-ready',
+states = ('whale-ready', 'whale-blink', 'whale-maid-ready', 'claude-ready',
           'whale-maid-listening', 'claude-speaking', 'claude-settings', 'whale-setup')
 sheet = Image.new('RGB', (1040, 760), '#f0f3f2')
 draw = ImageDraw.Draw(sheet)

@@ -24,10 +24,10 @@ typedef struct {
     uint32_t base,card,border,focus,accent;
 } theme_style_t;
 static const theme_style_t theme_styles[ONLINE_THEME_COUNT]={
-    [ONLINE_THEME_WHALE]={"界面：鲸鱼娘",0xE7F0FF,0xF5FAFF,0xCCDDF0,0xD9EDFF,0x2F6FA7},
-    [ONLINE_THEME_MINT]={"界面：薄荷表情",YELLOW,PAPER,0xBADDCF,0xD2F6E8,0x267963},
-    [ONLINE_THEME_WHALE_MAID]={"界面：鲸鱼娘2",0xE7F0FF,0xF5FAFF,0xCCDDF0,0xD9EDFF,0x2F6FA7},
+    [ONLINE_THEME_WHALE]={"界面：大肥鱼",0xE7F0FF,0xF5FAFF,0xCCDDF0,0xD9EDFF,0x2F6FA7},
+    [ONLINE_THEME_WHALE_MAID]={"界面：鲸鱼娘",0xE7F0FF,0xF5FAFF,0xCCDDF0,0xD9EDFF,0x2F6FA7},
     [ONLINE_THEME_CLAUDE]={"界面：Claude",0xFFF0DF,0xFFF8EE,0xECD1B6,0xFBE4CE,0x925325},
+    [ONLINE_THEME_BACKGROUND_ONLY]={"界面：仅背景",0xE7F0FF,0xF5FAFF,0xCCDDF0,0xD9EDFF,0x2F6FA7},
 };
 enum { SETTINGS_ROWS = ONLINE_MENU_COUNT };
 _Static_assert(SETTINGS_ROWS>=(int)ONLINE_DISPLAY_COUNT && SETTINGS_ROWS>=(int)ONLINE_SOUND_COUNT &&
@@ -43,7 +43,6 @@ static const struct {
     [ONLINE_MENU_HOME]={"返回首页",&ui_settings_home_image},
     [ONLINE_MENU_CONNECTION]={"连接设置",&ui_settings_connection_image},
 };
-static lv_obj_t *face_layer,*pupils[2],*lids[2],*closed_eyes[2],*ears[2],*mouth,*teeth,*tongue,*smile;
 static lv_obj_t *title,*header,*footer,*setup_panel,*setup_text;
 static lv_obj_t *setup_qr[2];
 static lv_obj_t *home_controls,*background_image,*settings_list;
@@ -186,24 +185,6 @@ static void home_status_update(const char *value) {
         lv_label_set_text(title,line);
     }
 }
-static void eye(int i,int x) {
-    shape(face_layer,x,89,96,101,0x63A99D,48);
-    lv_obj_t *rim=shape(face_layer,x,82,96,100,0x766D64,47);
-    lv_obj_set_style_border_width(rim,2,0); lv_obj_set_style_border_color(rim,lv_color_hex(0x625448),0);
-    shape(rim,4,3,88,92,0xE7E4CF,43);
-    shape(rim,8,7,80,84,0x9D9688,39);
-    lv_obj_t *white=shape(rim,10,10,76,78,0xFFFEF5,38);
-    /* Keep children inside the rounded eye geometrically. Corner clipping
-     * creates an off-screen alpha layer and can exhaust the TLS-era heap. */
-    pupils[i]=shape(white,22,25,37,43,0x9C6842,20);
-    shape(pupils[i],5,5,27,33,0x593C2D,15);
-    shape(pupils[i],10,8,19,26,0x231D1B,12);
-    shape(pupils[i],6,6,11,13,0xFFFFFF,7);
-    shape(pupils[i],25,27,5,6,0xEED4AC,3);
-    lids[i]=shape(white,0,0,76,0,YELLOW,38);
-    closed_eyes[i]=shape(white,10,53,56,4,INK,2);
-    shape(rim,20,5,27,2,0xFFFFFF,1);
-}
 static void setup_codes(const char *ssid) {
     static char rendered[33];
     if(setup_qr[0] && setup_qr[1] && !strcmp(rendered,ssid))return;
@@ -281,11 +262,8 @@ static void refresh(lv_timer_t *timer) {
     if(asleep) {stop_bounce();return;}
     bool home=menu.page==ONLINE_HOME,setup=s.phase==ONLINE_SETUP;
     atomic_store(&ptt_home,home && !setup);
-    bool listen=(s.mic || s.ptt_recording) && (s.phase==ONLINE_LISTENING || s.phase==ONLINE_READY);
-    bool speaking=s.phase==ONLINE_SPEAKING;
     online_theme_t theme=online_theme_normalize(s.theme);
     const theme_style_t *style=&theme_styles[theme];
-    bool mint=theme==ONLINE_THEME_MINT;
     static int applied_theme=-1;
     if(applied_theme!=(int)theme) {
         lv_obj_set_style_bg_color(app_screen,lv_color_hex(style->base),0);
@@ -297,8 +275,8 @@ static void refresh(lv_timer_t *timer) {
     static int title_mode=-1;
     int next_title_mode=home?(show_overlay?1:0):2;
     if(title_mode!=next_title_mode) {
-        lv_obj_set_style_text_font(title,home?&mouthy_bean_zh_12:&mouthy_bean_zh_16,0);
-        lv_obj_set_y(title,home?10:8);
+        lv_obj_set_style_text_font(title,&mouthy_bean_zh_16,0);
+        lv_obj_set_y(title,8);
         lv_label_set_long_mode(title,home?(show_overlay?LV_LABEL_LONG_SCROLL:LV_LABEL_LONG_CLIP):LV_LABEL_LONG_WRAP);
         title_mode=next_title_mode;
     }
@@ -325,7 +303,7 @@ static void refresh(lv_timer_t *timer) {
     visibility(background_image,home && !setup && background);
     if(home && !setup && background && lv_image_get_src(background_image)!=background)
         lv_image_set_src(background_image,background);
-    visibility(face_layer,home && !setup && mint);visibility(portrait_layer,home && !setup && !mint);
+    visibility(portrait_layer,home && !setup && theme!=ONLINE_THEME_BACKGROUND_ONLY);
     /* Actionable details use the top status line; leave room for phase icons. */
     bool detail=!buttons_available || s.feedback_visible || s.phase==ONLINE_ERROR || s.phase==ONLINE_CONNECTING ||
         (s.phase==ONLINE_READY && !s.audio_ok);
@@ -338,7 +316,7 @@ static void refresh(lv_timer_t *timer) {
     ui_icon_kind_t phase=s.phase==ONLINE_THINKING?UI_THINKING:
         s.phase==ONLINE_SPEAKING?UI_VOLUME:UI_LISTEN;
     ui_icon_update(&phase_icon,phase,s.phase==ONLINE_THINKING?(int)((now/350)%3):s.phase==ONLINE_SPEAKING?100:s.mic,INK);
-    if(home && !setup && !mint) {
+    if(home && !setup && theme!=ONLINE_THEME_BACKGROUND_ONLY) {
         online_avatar_t frame=online_avatar_frame(s.phase,s.mic || s.ptt_recording,s.level,now);
         const lv_image_dsc_t *source=whale_avatar_view_source(theme,frame);
         if(lv_image_get_src(portrait_image)!=source)lv_image_set_src(portrait_image,source);
@@ -455,22 +433,6 @@ static void refresh(lv_timer_t *timer) {
     settings_page=menu.page;
     if(home && setup) {text_changed(setup_text,s.message);setup_codes(s.message);}
     if(!setup)for(unsigned i=0;i<2;i++)if(setup_qr[i]) {lv_obj_delete(setup_qr[i]);setup_qr[i]=NULL;}
-    for(int i=0;i<2;i++) {
-        visibility(ears[i],listen);lv_obj_set_y(ears[i],listen?49:82);
-        bool blink=!listen && !speaking && now%4300<120;
-        lv_obj_set_height(lids[i],blink?74:0);visibility(closed_eyes[i],blink);
-        /* Keep eye contact while speaking, without the idle horizontal drift. */
-        lv_obj_set_pos(pupils[i],22,25);
-    }
-    unsigned mh=speaking?22+s.level/1100:24;if(mh>46)mh=46;
-    unsigned mw=speaking?64:60;
-    lv_obj_set_size(mouth,mw,mh);
-    lv_obj_set_pos(mouth,(240-mw)/2,218-mh/2);
-    lv_obj_set_pos(teeth,(mw-42)/2,1);
-    lv_obj_set_pos(tongue,(mw-30)/2,mh-12);
-    visibility(mouth,speaking);
-    visibility(smile,!speaking);
-    visibility(tongue,speaking);
     if(home && setup) {
         const char *hint="长按确定 · 设置";
         if(s.profile_count)hint=s.profile_save_failed?"恢复失败 · 确定重试":"确定退出配网 · 长按设置";
@@ -496,31 +458,11 @@ void online_ui_enter(bool buttons_ok) {
     /* Individual rect blending keeps the photo visible without allocating an
      * off-screen layer; retain enough tint for text over dark custom images. */
     header=shape(screen,0,0,240,35,0xE7F0FF,0);
-    lv_obj_set_style_bg_opa(header,LV_OPA_70,0);
+    lv_obj_set_style_bg_opa(header,LV_OPA_50,0);
     lv_obj_move_to_index(header,1);
     lv_obj_move_foreground(title);
     ui_icon_create(screen,&link_icon,UI_LINK,10,8,20);
     ui_icon_create(screen,&battery_icon,UI_BATTERY,202,6,28);
-    face_layer=shape(screen,0,0,240,320,YELLOW,0);
-    lv_obj_set_style_bg_opa(face_layer,LV_OPA_TRANSP,0);
-    for(int i=0;i<2;i++) {
-        ears[i]=shape(face_layer,i?178:37,82,25,68,0x3C887D,12);
-        shape(ears[i],3,3,19,62,0xD3F4EB,9);shape(ears[i],7,9,11,45,0x91CABE,6);
-    }
-    eye(0,19);eye(1,125);
-    shape(face_layer,27,191,37,12,0xE68048,6);shape(face_layer,177,191,37,12,0xE68048,6);
-    mouth=shape(face_layer,90,206,60,24,0x49291F,18);
-    /* Teeth/tongue stay inside the rounded mouth without an alpha layer. */
-    teeth=shape(mouth,9,1,42,7,0xFFFEF5,3);
-    tongue=shape(mouth,15,12,30,10,0xF28D89,7);
-    smile=lv_arc_create(face_layer);lv_obj_remove_style_all(smile);
-    lv_obj_remove_flag(smile,LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_set_pos(smile,88,162);lv_obj_set_size(smile,64,64);
-    lv_arc_set_bg_angles(smile,40,140);lv_arc_set_angles(smile,40,140);
-    lv_obj_set_style_arc_color(smile,lv_color_hex(0x49291F),LV_PART_INDICATOR);
-    lv_obj_set_style_arc_opa(smile,LV_OPA_COVER,LV_PART_INDICATOR);
-    lv_obj_set_style_arc_width(smile,4,LV_PART_INDICATOR);
-    lv_obj_set_style_arc_rounded(smile,true,LV_PART_INDICATOR);
     portrait_layer=shape(screen,0,WHALE_VIEW_TOP,WHALE_VIEW_WIDTH,WHALE_VIEW_HEIGHT,0xE7F0FF,0);
     lv_obj_set_style_bg_opa(portrait_layer,LV_OPA_TRANSP,0);
     portrait_image=lv_image_create(portrait_layer);
@@ -540,15 +482,15 @@ void online_ui_enter(bool buttons_ok) {
     lv_obj_remove_flag(home_controls,LV_OBJ_FLAG_SCROLLABLE|LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_pos(home_controls,0,284);lv_obj_set_size(home_controls,240,26);
     lv_obj_t *up_hint=key_hint(home_controls,8,0,64,26);
-    lv_obj_set_style_bg_color(up_hint,lv_color_hex(0xE7F0FF),0);lv_obj_set_style_bg_opa(up_hint,LV_OPA_60,0);
+    lv_obj_set_style_bg_color(up_hint,lv_color_hex(0xE7F0FF),0);lv_obj_set_style_bg_opa(up_hint,LV_OPA_40,0);
     ui_icon_create(up_hint,&up_icon,UI_UP,5,3,20);
     ui_icon_create(up_hint,&volume_icon,UI_VOLUME_LEVEL,28,3,20);
     lv_obj_t *ok_hint=key_hint(home_controls,88,0,64,26);
-    lv_obj_set_style_bg_color(ok_hint,lv_color_hex(0xE7F0FF),0);lv_obj_set_style_bg_opa(ok_hint,LV_OPA_60,0);
+    lv_obj_set_style_bg_color(ok_hint,lv_color_hex(0xE7F0FF),0);lv_obj_set_style_bg_opa(ok_hint,LV_OPA_40,0);
     ui_icon_create(ok_hint,&ok_icon,UI_OK,10,3,20);
     ui_icon_create(ok_hint,&action_mic,UI_MIC,34,3,20);
     lv_obj_t *down_hint=key_hint(home_controls,168,0,64,26);
-    lv_obj_set_style_bg_color(down_hint,lv_color_hex(0xE7F0FF),0);lv_obj_set_style_bg_opa(down_hint,LV_OPA_60,0);
+    lv_obj_set_style_bg_color(down_hint,lv_color_hex(0xE7F0FF),0);lv_obj_set_style_bg_opa(down_hint,LV_OPA_40,0);
     ui_icon_create(down_hint,&down_icon,UI_DOWN,10,3,20);
     ui_icon_create(down_hint,&stop_icon,UI_STOP,34,3,20);
     settings_layer=shape(screen,0,35,240,285,YELLOW,0);

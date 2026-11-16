@@ -44,34 +44,37 @@ void nvs_close(nvs_handle_t handle) { assert(handle && open_handles);open_handle
 
 int main(void) {
     assert(online_theme_load()==ONLINE_THEME_WHALE);
-    assert(online_theme_save(ONLINE_THEME_MINT));
-    assert(online_theme_load()==ONLINE_THEME_MINT);
+    stored[0]=1;present[0]=true;
+    assert(online_theme_load()==ONLINE_THEME_WHALE);
+    assert(!online_theme_save((online_theme_t)1));
     assert(online_theme_save(ONLINE_THEME_WHALE_MAID));
     assert(online_theme_load()==ONLINE_THEME_WHALE_MAID);
     assert(online_theme_save(ONLINE_THEME_CLAUDE));
     assert(online_theme_load()==ONLINE_THEME_CLAUDE);
+    assert(online_theme_save(ONLINE_THEME_BACKGROUND_ONLY));
+    assert(online_theme_load()==ONLINE_THEME_BACKGROUND_ONLY);
     assert(!online_theme_save(ONLINE_THEME_COUNT));
-    assert(online_theme_load()==ONLINE_THEME_CLAUDE);
+    assert(online_theme_load()==ONLINE_THEME_BACKGROUND_ONLY);
     assert(online_theme_save(ONLINE_THEME_WHALE));
     assert(online_theme_load()==ONLINE_THEME_WHALE);
     fail_commit=true;
     assert(!online_theme_save(ONLINE_THEME_CLAUDE));
     assert(online_theme_load()==ONLINE_THEME_WHALE);
     fail_commit=false;fail_set=true;
-    assert(!online_theme_save(ONLINE_THEME_MINT));
+    assert(!online_theme_save(ONLINE_THEME_WHALE_MAID));
     assert(online_theme_load()==ONLINE_THEME_WHALE);
     fail_set=false;fail_open=true;
-    assert(!online_theme_save(ONLINE_THEME_MINT));
+    assert(!online_theme_save(ONLINE_THEME_WHALE_MAID));
     assert(online_theme_load()==ONLINE_THEME_WHALE);
     fail_open=false;stored[0]=255;present[0]=true;
     assert(online_theme_load()==ONLINE_THEME_WHALE);
     assert(!online_theme_save((online_theme_t)255));
     assert(online_idle_load()==ONLINE_IDLE_1_MIN);
-    assert(online_theme_save(ONLINE_THEME_MINT));
+    assert(online_theme_save(ONLINE_THEME_WHALE_MAID));
     for(unsigned i=0;i<=ONLINE_IDLE_NEVER;i++) {
         assert(online_idle_save((online_idle_t)i));
         assert(online_idle_load()==(online_idle_t)i);
-        assert(online_theme_load()==ONLINE_THEME_MINT);
+        assert(online_theme_load()==ONLINE_THEME_WHALE_MAID);
     }
     assert(online_theme_save(ONLINE_THEME_WHALE));
     assert(online_idle_load()==ONLINE_IDLE_NEVER);

@@ -185,7 +185,8 @@ bool online_endpoint_from_ip_port(const char *ip,unsigned port,char *out,size_t 
 }
 
 online_theme_t online_theme_normalize(unsigned stored) {
-    return stored<ONLINE_THEME_COUNT?(online_theme_t)stored:ONLINE_THEME_WHALE;
+    return stored==ONLINE_THEME_WHALE_MAID || stored==ONLINE_THEME_CLAUDE || stored==ONLINE_THEME_BACKGROUND_ONLY
+        ?(online_theme_t)stored:ONLINE_THEME_WHALE;
 }
 online_background_t online_background_normalize(unsigned stored) {
     return stored<ONLINE_BACKGROUND_COUNT?(online_background_t)stored:ONLINE_BACKGROUND_DAY;
@@ -244,7 +245,12 @@ bool online_standby_busy(online_phase_t phase,unsigned mode,bool reply_pending,
         reply_pending || host_busy || capturing || feedback_pending;
 }
 online_theme_t online_theme_next(online_theme_t theme) {
-    return (online_theme_t)((online_theme_normalize(theme)+1)%ONLINE_THEME_COUNT);
+    switch(online_theme_normalize(theme)) {
+        case ONLINE_THEME_WHALE: return ONLINE_THEME_WHALE_MAID;
+        case ONLINE_THEME_WHALE_MAID: return ONLINE_THEME_CLAUDE;
+        case ONLINE_THEME_CLAUDE: return ONLINE_THEME_BACKGROUND_ONLY;
+        default: return ONLINE_THEME_WHALE;
+    }
 }
 online_avatar_t online_avatar_frame(online_phase_t phase,bool mic,unsigned level,uint64_t now_ms) {
     if(phase==ONLINE_ERROR)return ONLINE_AVATAR_ERROR;
