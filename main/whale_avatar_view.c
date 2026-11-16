@@ -33,7 +33,7 @@ static lv_result_t open_image(lv_image_decoder_t *decoder,lv_image_decoder_dsc_t
     const lv_image_dsc_t *frame=frame_for(dsc->src);
     if(!frame || frame->header.cf!=LV_COLOR_FORMAT_RAW ||
         frame->header.w!=WHALE_VIEW_WIDTH || frame->header.h>WHALE_VIEW_HEIGHT ||
-        frame->data_size<=WHALE_AVATAR_PALETTE_BYTES+(frame->header.h+1)*2)return LV_RESULT_INVALID;
+        frame->data_size<=WHALE_AVATAR_PALETTE_BYTES+((unsigned)frame->header.h+1u)*2u)return LV_RESULT_INVALID;
     dsc->user_data=(void *)frame;dsc->args.no_cache=true;dsc->decoded=NULL;
     return LV_RESULT_OK;
 }
