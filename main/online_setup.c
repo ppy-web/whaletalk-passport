@@ -72,10 +72,6 @@ extern const unsigned char appearance_start[] asm("_binary_appearance_page_html_
 extern const unsigned char appearance_end[] asm("_binary_appearance_page_html_end");
 extern const unsigned char background_js_start[] asm("_binary_background_image_js_start");
 extern const unsigned char background_js_end[] asm("_binary_background_image_js_end");
-extern const unsigned char day_png_start[] asm("_binary_seaside_tea_png_start");
-extern const unsigned char day_png_end[] asm("_binary_seaside_tea_png_end");
-extern const unsigned char night_png_start[] asm("_binary_moonlit_dream_png_start");
-extern const unsigned char night_png_end[] asm("_binary_moonlit_dream_png_end");
 static esp_err_t appearance(httpd_req_t *r) {
     httpd_resp_set_type(r,"text/html; charset=utf-8");
     httpd_resp_set_hdr(r,"Cache-Control","no-store");
@@ -86,10 +82,15 @@ static esp_err_t background_js(httpd_req_t *r) {
     httpd_resp_set_type(r,"text/javascript; charset=utf-8");
     return httpd_resp_send(r,(const char *)background_js_start,background_js_end-background_js_start-1);
 }
-static esp_err_t background_preview(httpd_req_t *r) {
+static esp_err_t send_background_preview(httpd_req_t *r,online_background_t preset) {
+    const lv_image_dsc_t *image=whale_backgrounds[preset];
+    httpd_resp_set_type(r,"image/bmp");
+    return httpd_resp_send(r,(const char *)image->data,image->data_size);
+}
+static esp_err_t day_night_preview(httpd_req_t *r) {
+    /* Keep the existing image URLs. Browsers use the response's BMP content type. */
     bool night=!strcmp(r->uri,"/background-night.png");
-    const unsigned char *start=night?night_png_start:day_png_start,*end=night?night_png_end:day_png_end;
-    httpd_resp_set_type(r,"image/png");return httpd_resp_send(r,(const char *)start,end-start);
+    return send_background_preview(r,night?ONLINE_BACKGROUND_NIGHT:ONLINE_BACKGROUND_DAY);
 }
 static esp_err_t seasonal_preview(httpd_req_t *r) {
     char query[24],value[2];
@@ -97,9 +98,7 @@ static esp_err_t seasonal_preview(httpd_req_t *r) {
        httpd_query_key_value(query,"id",value,sizeof(value))!=ESP_OK ||
        value[0]<'0'+ONLINE_BACKGROUND_SPRING || value[0]>'0'+ONLINE_BACKGROUND_WINTER)
         return httpd_resp_send_err(r,HTTPD_404_NOT_FOUND,"背景不存在");
-    const lv_image_dsc_t *image=whale_backgrounds[value[0]-'0'];
-    httpd_resp_set_type(r,"image/bmp");
-    return httpd_resp_send(r,(const char *)image->data,image->data_size);
+    return send_background_preview(r,value[0]-'0');
 }
 static esp_err_t background_upload(httpd_req_t *r) {
     if(!setup_authorized(r))return httpd_resp_send_err(r,HTTPD_403_FORBIDDEN,"请重新打开配置页");
@@ -236,8 +235,8 @@ esp_err_t online_start_setup(char *description,size_t size) {
     const httpd_uri_t appearance_routes[]={
         {.uri="/appearance",.method=HTTP_GET,.handler=appearance},
         {.uri="/background-image.js",.method=HTTP_GET,.handler=background_js},
-        {.uri="/background-day.png",.method=HTTP_GET,.handler=background_preview},
-        {.uri="/background-night.png",.method=HTTP_GET,.handler=background_preview},
+        {.uri="/background-day.png",.method=HTTP_GET,.handler=day_night_preview},
+        {.uri="/background-night.png",.method=HTTP_GET,.handler=day_night_preview},
         {.uri="/background-season.bmp",.method=HTTP_GET,.handler=seasonal_preview},
         {.uri="/background/upload",.method=HTTP_POST,.handler=background_upload},
         {.uri="/background/apply",.method=HTTP_POST,.handler=background_apply},

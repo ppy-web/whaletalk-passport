@@ -5,7 +5,7 @@
 /* Pre-rendered A8 masks are read directly from flash; no full image buffers or
  * child objects are needed. Dynamic levels use the same 24-unit grid. */
 typedef enum {
-    UI_LINK, UI_MIC, UI_BATTERY, UI_VOLUME, UI_UP, UI_DOWN, UI_OK,
+    UI_LINK, UI_MIC, UI_BATTERY, UI_BATTERY_CHARGING, UI_VOLUME, UI_UP, UI_DOWN, UI_OK,
     UI_STOP, UI_THINKING, UI_LISTEN, UI_VOLUME_LEVEL
 } ui_icon_kind_t;
 typedef struct {
@@ -16,12 +16,15 @@ typedef struct {
 } ui_icon_t;
 typedef struct { lv_layer_t *layer; int x,y,size; lv_color_t color; } ui_pen_t;
 static int ui_px(const ui_pen_t *p,int n) { return (n*p->size+12)/24; }
-static void ui_line(ui_pen_t *p,int x1,int y1,int x2,int y2) {
+static void ui_line_weight(ui_pen_t *p,int x1,int y1,int x2,int y2,int width) {
     lv_draw_line_dsc_t d;lv_draw_line_dsc_init(&d);
     d.p1=(lv_point_precise_t){p->x+ui_px(p,x1),p->y+ui_px(p,y1)};
     d.p2=(lv_point_precise_t){p->x+ui_px(p,x2),p->y+ui_px(p,y2)};
-    d.color=p->color;d.width=ui_px(p,2);d.round_start=1;d.round_end=1;
+    d.color=p->color;d.width=ui_px(p,width);d.round_start=1;d.round_end=1;
     lv_draw_line(p->layer,&d);
+}
+static void ui_line(ui_pen_t *p,int x1,int y1,int x2,int y2) {
+    ui_line_weight(p,x1,y1,x2,y2,2);
 }
 static void ui_rect(ui_pen_t *p,int x,int y,int w,int h,int radius,bool fill,lv_opa_t opacity) {
     lv_draw_rect_dsc_t d;lv_draw_rect_dsc_init(&d);
@@ -46,13 +49,12 @@ static void ui_draw_icon(lv_event_t *event) {
         case UI_MIC:ui_image(&p,i->value?&ui_mic_on_image:&ui_mic_off_image);break;
         case UI_BATTERY: {
             ui_image(&p,&ui_battery_image);
-            if(i->value<0)ui_line(&p,7,12,13,12);
-            else if(i->value>0) {
-                int width=(i->value*13+99)/100;
-                ui_rect(&p,4,9,width,6,1,true,LV_OPA_COVER);
-            }
+            if(i->value<0)ui_line_weight(&p,7,12,13,12,1);
+            else for(int n=0;n<3;n++)if(i->value>n*100/3)
+                ui_line_weight(&p,6+n*4,10,6+n*4,14,1);
             break;
         }
+        case UI_BATTERY_CHARGING:ui_image(&p,&ui_battery_charging_image);break;
         case UI_VOLUME:ui_image(&p,i->value<=0?&ui_volume_off_image:
             i->value<=50?&ui_volume_low_image:&ui_volume_high_image);break;
         case UI_UP:ui_image(&p,&ui_up_image);break;

@@ -8,6 +8,7 @@
 #include "online_ui.c"
 static online_status_t fixture;
 static int battery_value=87;
+static int charging_value=-1;
 static unsigned toggles,cancels,volumes,setups,themes;
 static unsigned ptt_presses,ptt_starts,ptt_releases;
 static unsigned idle_changes,brightness_changes;
@@ -28,6 +29,7 @@ void bsp_display_backlight(uint8_t percent){backlight=percent;backlight_changes+
 static int64_t clock_us=2200000;
 int64_t esp_timer_get_time(void){return clock_us;}
 int bsp_battery_soc(void){return battery_value;}
+int bsp_battery_charging(void){return charging_value;}
 void online_snapshot(online_status_t *s){*s=fixture;}
 void online_toggle_mic(void){toggles++;}
 void online_cancel(void){cancels++;}
@@ -95,7 +97,7 @@ static uint32_t object_render_hash(lv_obj_t *object){
 static uint32_t icon_render_hash(ui_icon_t *icon){return object_render_hash(icon->obj);}
 static void check_icon_flash_sources(void){
     const lv_image_dsc_t *images[]={&ui_link_off_image,&ui_link_on_image,
-        &ui_mic_off_image,&ui_mic_on_image,&ui_battery_image,&ui_up_image,&ui_down_image,
+        &ui_mic_off_image,&ui_mic_on_image,&ui_battery_image,&ui_battery_charging_image,&ui_up_image,&ui_down_image,
         &ui_ok_image,&ui_stop_image,&ui_thinking_0_image,&ui_thinking_1_image,
         &ui_thinking_2_image,&ui_listen_image,&ui_volume_off_image,&ui_volume_low_image,
         &ui_volume_high_image,&ui_volume_level_image};
@@ -118,10 +120,12 @@ static void snap(const char *name){
 }
 static const char *const theme_names[ONLINE_THEME_COUNT]={
     [ONLINE_THEME_WHALE]="whale",
-    [ONLINE_THEME_WHALE_MAID]="whale-maid",[ONLINE_THEME_CLAUDE]="claude",[ONLINE_THEME_BACKGROUND_ONLY]="background-only",
+    [ONLINE_THEME_WHALE_MAID]="whale-maid",[ONLINE_THEME_CLAUDE]="claude",
+    [ONLINE_THEME_CHATGPT]="chatgpt",[ONLINE_THEME_BACKGROUND_ONLY]="background-only",
 };
 static void check_foreground_decoding(void) {
-    const lv_image_dsc_t *images[]={&home_foreground_top,&home_foreground_bottom};
+    const lv_image_dsc_t *images[]={&home_foreground_top,&home_foreground_bottom,
+        &claude_foreground_top,&claude_foreground_bottom,&chatgpt_foreground_top,&chatgpt_foreground_bottom};
     for(unsigned i=0;i<sizeof(images)/sizeof(*images);i++) {
         lv_image_decoder_dsc_t decoder;
         assert(lv_image_decoder_open(&decoder,images[i],NULL)==LV_RESULT_OK);
@@ -222,7 +226,8 @@ int main(void) {
     const char *messages[]={"DSH-Voice-1234","正在连接后端","确定：开始对话","我在认真听","正在请教 Agent","DSH","后端消息过大或分片无效"};
     const char *names[]={"setup","connecting","ready","listening","thinking","speaking","error"};
     uint32_t idle_hashes[ONLINE_THEME_COUNT]={0};
-    const online_theme_t available_themes[]={ONLINE_THEME_WHALE,ONLINE_THEME_WHALE_MAID,ONLINE_THEME_CLAUDE,ONLINE_THEME_BACKGROUND_ONLY};
+    const online_theme_t available_themes[]={ONLINE_THEME_WHALE,ONLINE_THEME_WHALE_MAID,
+        ONLINE_THEME_CLAUDE,ONLINE_THEME_CHATGPT,ONLINE_THEME_BACKGROUND_ONLY};
     for(unsigned t=0;t<sizeof(available_themes)/sizeof(available_themes[0]);t++) {
         unsigned theme=available_themes[t];
         fixture.theme=online_theme_normalize(theme);
@@ -234,6 +239,10 @@ int main(void) {
             fixture.linked=i>=ONLINE_READY && i<=ONLINE_SPEAKING;
             clock_us=i==ONLINE_THINKING?2400000:2200000;
             snprintf(fixture.message,sizeof(fixture.message),"%s",messages[i]);refresh(NULL);
+            assert(lv_image_get_src(home_foreground_top_obj)==(theme==ONLINE_THEME_CLAUDE?&claude_foreground_top:
+                theme==ONLINE_THEME_CHATGPT?&chatgpt_foreground_top:&home_foreground_top));
+            assert(lv_image_get_src(home_foreground_bottom_obj)==(theme==ONLINE_THEME_CLAUDE?&claude_foreground_bottom:
+                theme==ONLINE_THEME_CHATGPT?&chatgpt_foreground_bottom:&home_foreground_bottom));
             char name[48];snprintf(name,sizeof(name),"%s-%s",theme_names[theme],names[i]);snap(name);
             assert(lv_obj_has_flag(portrait_layer,LV_OBJ_FLAG_HIDDEN)==(i==ONLINE_SETUP || !portrait));
             if(portrait && i>=ONLINE_READY) {
@@ -246,19 +255,37 @@ int main(void) {
             assert(lv_obj_has_flag(home_controls,LV_OBJ_FLAG_HIDDEN)==(i==ONLINE_SETUP));
         }
         if(portrait) {
-            clock_us=4500000;fixture.phase=ONLINE_READY;fixture.mic=false;fixture.linked=true;refresh(NULL);
+            clock_us=theme==ONLINE_THEME_WHALE?3400000:4500000;
+            fixture.phase=ONLINE_READY;fixture.mic=false;fixture.linked=true;refresh(NULL);
             char name[48];snprintf(name,sizeof(name),"%s-blink",theme_names[theme]);snap(name);
             expressions[ONLINE_AVATAR_BLINK]=object_render_hash(portrait_layer);
-            for(unsigned i=0;i<ONLINE_AVATAR_COUNT;i++) {
+            if(theme==ONLINE_THEME_WHALE) {
+                clock_us=2850000;refresh(NULL);snap("whale-eating");
+                expressions[ONLINE_AVATAR_EATING]=object_render_hash(portrait_layer);
+                fixture.phase=ONLINE_SPEAKING;fixture.mic=true;clock_us=4000000;refresh(NULL);
+                clock_us=4200000;refresh(NULL);snap("whale-speaking-closed");
+                expressions[ONLINE_AVATAR_SPEAKING_CLOSED]=object_render_hash(portrait_layer);
+                clock_us=5200000;refresh(NULL);snap("whale-speaking-closed-blink");
+                expressions[ONLINE_AVATAR_SPEAKING_CLOSED_BLINK]=object_render_hash(portrait_layer);
+                clock_us=5300000;refresh(NULL);snap("whale-speaking-blink");
+                expressions[ONLINE_AVATAR_SPEAKING_BLINK]=object_render_hash(portrait_layer);
+                clock_us=5350000;refresh(NULL);
+                assert(lv_image_get_src(portrait_image)==whale_avatar_view_source(ONLINE_THEME_WHALE,ONLINE_AVATAR_SPEAKING));
+                clock_us=8700000;refresh(NULL);
+                assert(lv_image_get_src(portrait_image)==whale_avatar_view_source(ONLINE_THEME_WHALE,ONLINE_AVATAR_SPEAKING_CLOSED_BLINK));
+                fixture.phase=ONLINE_READY;refresh(NULL);
+                fixture.phase=ONLINE_SPEAKING;clock_us=8750000;refresh(NULL);
+                assert(lv_image_get_src(portrait_image)==whale_avatar_view_source(ONLINE_THEME_WHALE,ONLINE_AVATAR_SPEAKING));
+            }
+            unsigned frame_count=theme==ONLINE_THEME_WHALE?ONLINE_AVATAR_COUNT:ONLINE_AVATAR_ERROR+1;
+            for(unsigned i=0;i<frame_count;i++) {
                 assert(expressions[i]);
                 for(unsigned j=0;j<i;j++)assert(expressions[i]!=expressions[j]);
             }
             idle_hashes[theme]=expressions[ONLINE_AVATAR_IDLE];clock_us=2200000;
+            for(unsigned j=0;j<t;j++)assert(idle_hashes[theme]!=idle_hashes[available_themes[j]]);
         }
     }
-    assert(idle_hashes[ONLINE_THEME_WHALE]!=idle_hashes[ONLINE_THEME_WHALE_MAID]);
-    assert(idle_hashes[ONLINE_THEME_WHALE]!=idle_hashes[ONLINE_THEME_CLAUDE]);
-    assert(idle_hashes[ONLINE_THEME_WHALE_MAID]!=idle_hashes[ONLINE_THEME_CLAUDE]);
     fixture.theme=ONLINE_THEME_WHALE;fixture.phase=ONLINE_CONNECTING;
     const char *connections[]={"正在连接 Wi-Fi","Wi-Fi 断开，正在重试", "正在连接后端","后端断开，正在重连"};
     for(unsigned i=0;i<sizeof(connections)/sizeof(connections[0]);i++) {
@@ -274,11 +301,15 @@ int main(void) {
     assert(!lv_obj_has_flag(phase_icon.obj,LV_OBJ_FLAG_HIDDEN) && phase_icon.kind==UI_LISTEN);
     fixture.linked=false;refresh(NULL);assert(strstr(lv_label_get_text(title),"后端"));
     fixture.theme=ONLINE_THEME_WHALE;fixture.phase=ONLINE_LISTENING;fixture.mic=true;fixture.linked=true;fixture.feedback_visible=true;
+    fixture.feedback_error=true;
     snprintf(fixture.message,sizeof(fixture.message),"%s",online_error_text("passport-no-speech"));refresh(NULL);snap("recognition-error");
     assert(!strcmp(lv_label_get_text(title),fixture.message));
     assert(lv_obj_has_flag(phase_icon.obj,LV_OBJ_FLAG_HIDDEN));
+    assert(lv_image_get_src(portrait_image)==whale_avatar_view_source(ONLINE_THEME_WHALE,ONLINE_AVATAR_ERROR));
+    fixture.feedback_error=false;
     fixture.phase=ONLINE_THINKING;
-    snprintf(fixture.message,sizeof(fixture.message),"耗时较长，按下键可取消");refresh(NULL);snap("recognition-slow");
+    snprintf(fixture.message,sizeof(fixture.message),"耗时较长，按下键取消");refresh(NULL);snap("recognition-slow");
+    assert(lv_image_get_src(portrait_image)==whale_avatar_view_source(ONLINE_THEME_WHALE,ONLINE_AVATAR_THINKING));
     fixture.feedback_visible=false;
     fixture.phase=ONLINE_LISTENING;
     const char *progress[]={"capturing","recognizing","thinking","tool","synthesizing","playing"};
@@ -298,11 +329,13 @@ int main(void) {
     assert(!fixture.progress && !*lv_label_get_text(title) && action_mic.value);
     fixture.phase=ONLINE_THINKING;
     refresh(NULL);assert(!lv_obj_has_flag(phase_icon.obj,LV_OBJ_FLAG_HIDDEN) && phase_icon.kind==UI_THINKING);
+    const lv_image_dsc_t *thinking_portrait=whale_avatar_view_source(ONLINE_THEME_WHALE,ONLINE_AVATAR_THINKING);
     uint32_t thinking_hashes[3]={0};
     for(unsigned i=0;i<32;i++) {
         clock_us=(int64_t)i*100000;refresh(NULL);
         char name[48];snprintf(name,sizeof(name),"thinking-animation-%02u",i);snap(name);
         assert(fixture.phase==ONLINE_THINKING && backlight==100);
+        assert(lv_image_get_src(portrait_image)==thinking_portrait);
         assert(phase_icon.value>=0 && phase_icon.value<3);
         thinking_hashes[phase_icon.value]=icon_render_hash(&phase_icon);
     }
@@ -319,6 +352,7 @@ int main(void) {
     assert(!lv_obj_has_flag(background_image,LV_OBJ_FLAG_HIDDEN));snap("background-night");
     fixture.theme=ONLINE_THEME_WHALE_MAID;refresh(NULL);snap("whale-maid-night");
     fixture.theme=ONLINE_THEME_CLAUDE;refresh(NULL);snap("claude-night");
+    fixture.theme=ONLINE_THEME_CHATGPT;refresh(NULL);snap("chatgpt-night");
     fixture.theme=ONLINE_THEME_WHALE;
     fixture.custom_background=true;fixture.background=ONLINE_BACKGROUND_CUSTOM;
     const uint8_t bg_header[]={'W','T','B','G',1,96,128,16};memcpy(custom_data,bg_header,sizeof(bg_header));
@@ -331,6 +365,7 @@ int main(void) {
     refresh(NULL);snap("background-custom-dark");
     fixture.theme=ONLINE_THEME_WHALE_MAID;refresh(NULL);snap("whale-maid-custom-dark");
     fixture.theme=ONLINE_THEME_CLAUDE;refresh(NULL);snap("claude-custom-dark");
+    fixture.theme=ONLINE_THEME_CHATGPT;refresh(NULL);snap("chatgpt-custom-dark");
     fixture.theme=ONLINE_THEME_WHALE;refresh(NULL);
     fixture.phase=ONLINE_ERROR;strcpy(fixture.message,"请在 DSH 刷新预设");refresh(NULL);snap("custom-dark-preset-error");
     fixture.phase=ONLINE_THINKING;custom_data[8]=0xff;custom_data[9]=0xcf;custom_data[10]=0x1f;custom_data[11]=0xf7;
@@ -387,16 +422,20 @@ int main(void) {
     assert(!link_icon.value && action_mic.value);
     assert(icon_render_hash(&link_icon)!=connected && icon_render_hash(&action_mic)!=mic_off);
     snap("link-lost-mic-on");fixture.mic=false;fixture.linked=true;refresh(NULL);
-    const int battery_values[]={-1,0,10,100,150};
-    const char *battery_names[]={"battery-unknown","battery-empty","battery-low","battery-full","battery-clamped"};
+    const int battery_values[]={-1,0,10,50,100,150};
+    const char *battery_names[]={"battery-unknown","battery-empty","battery-low","battery-medium","battery-full","battery-clamped"};
     uint32_t previous_battery=0;
     for(unsigned i=0;i<sizeof(battery_values)/sizeof(battery_values[0]);i++) {
         battery_value=battery_values[i];update_battery(NULL);check();snap(battery_names[i]);
         assert(battery_icon.value==(battery_value>100?100:battery_value));
         uint32_t rendered=icon_render_hash(&battery_icon);
-        if(i)assert((rendered==previous_battery)==(i==4));
+        assert(battery_icon.kind==UI_BATTERY);
+        assert(battery_icon.color==(battery_value>=100?0x287B4D:battery_value>=0 && battery_value<=15?0xA84141:INK));
+        if(i)assert((rendered==previous_battery)==(i==5));
         previous_battery=rendered;
     }
+    battery_value=50;charging_value=1;update_usb_connection(NULL);assert(battery_icon.kind==UI_BATTERY_CHARGING);snap("battery-charging");
+    charging_value=-1;update_usb_connection(NULL);assert(battery_icon.kind==UI_BATTERY);
     battery_value=87;update_battery(NULL);
     fixture.audio_ok=false;strcpy(fixture.message,"音频不可用，请检查设备");refresh(NULL);
     assert(!strcmp(lv_label_get_text(title),fixture.message));snap("audio-unavailable");
@@ -446,12 +485,16 @@ int main(void) {
     assert(cancels==before_cancel+1 && ptt_presses==1 && ptt_starts==0 && ptt_releases==1);
     before_cancel=cancels;
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_PRESS);refresh(NULL);
-    fixture.feedback_visible=true;strcpy(fixture.message,"正在录音，松开发送");
+    fixture.feedback_visible=false;fixture.progress="正在识别";fixture.ptt_capture_started=false;
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_LONG);refresh(NULL);assert(fixture.ptt_recording);
-    assert(!strcmp(lv_label_get_text(title),fixture.message) && !lv_obj_has_flag(home_controls,LV_OBJ_FLAG_HIDDEN));snap("push-to-talk");
+    assert(!*lv_label_get_text(title) && !lv_obj_has_flag(phase_icon.obj,LV_OBJ_FLAG_HIDDEN) && phase_icon.kind==UI_THINKING);
+    fixture.ptt_capture_started=true;refresh(NULL);
+    assert(!*lv_label_get_text(title) && phase_icon.kind==UI_LISTEN && !lv_obj_has_flag(home_controls,LV_OBJ_FLAG_HIDDEN));snap("push-to-talk");
+    fixture.feedback_visible=true;strcpy(fixture.message,"录音拥塞");refresh(NULL);
+    assert(!strcmp(lv_label_get_text(title),fixture.message) && lv_obj_has_flag(phase_icon.obj,LV_OBJ_FLAG_HIDDEN));
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_RELEASE);online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
     assert(cancels==before_cancel+1 && ptt_presses==2 && ptt_starts==1 && ptt_releases==2 && !fixture.ptt_recording);
-    fixture.feedback_visible=false;fixture.message[0]=0;
+    fixture.feedback_visible=false;fixture.message[0]=0;fixture.progress=NULL;fixture.ptt_capture_started=false;
     online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);assert(setups==0);
     snap("settings-root");
     assert(lv_obj_is_visible(background_image));
@@ -473,15 +516,16 @@ int main(void) {
     online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);refresh(NULL);
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(menu.page==ONLINE_DISPLAY);
     assert(fixture.theme==ONLINE_THEME_WHALE && fixture.phase==ONLINE_READY && !fixture.mic);
-    const online_theme_t choices[]={ONLINE_THEME_WHALE_MAID,ONLINE_THEME_CLAUDE,ONLINE_THEME_BACKGROUND_ONLY,ONLINE_THEME_WHALE};
-    const char *labels[]={"鲸鱼娘","Claude","仅背景","大肥鱼"};
+    const online_theme_t choices[]={ONLINE_THEME_WHALE_MAID,ONLINE_THEME_CLAUDE,
+        ONLINE_THEME_CHATGPT,ONLINE_THEME_BACKGROUND_ONLY,ONLINE_THEME_WHALE};
+    const char *labels[]={"鲸鱼娘","Claude","ChatGPT","仅背景","大肥鱼"};
     online_background_t background_before_switch=fixture.background;
     for(unsigned i=0;i<sizeof(choices)/sizeof(choices[0]);i++) {
         online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);
         assert(themes==i+1 && fixture.theme==choices[i]);
         assert(fixture.background==background_before_switch);
         assert(strstr(lv_label_get_text(lv_obj_get_child(settings_choices[ONLINE_DISPLAY_THEME],0)),labels[i]));
-        if(choices[i]==ONLINE_THEME_CLAUDE || choices[i]==ONLINE_THEME_WHALE_MAID) {
+        if(choices[i]==ONLINE_THEME_CLAUDE || choices[i]==ONLINE_THEME_WHALE_MAID || choices[i]==ONLINE_THEME_CHATGPT) {
             char name[48];snprintf(name,sizeof(name),"%s-settings",theme_names[choices[i]]);snap(name);
         }
         /* Keep the idle expression across a real settings/home round trip. */

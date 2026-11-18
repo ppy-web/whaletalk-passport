@@ -8,8 +8,8 @@ for path in root.glob('*.ppm'):
     with Image.open(path) as frame:
         frame.save(path.with_suffix('.png'))
 
-states = ('whale-ready', 'whale-blink', 'whale-maid-ready', 'claude-ready',
-          'whale-maid-listening', 'claude-speaking', 'claude-settings', 'whale-setup')
+states = ('whale-ready', 'whale-maid-ready', 'claude-ready', 'chatgpt-ready',
+          'whale-blink', 'whale-maid-listening', 'chatgpt-settings', 'whale-setup')
 sheet = Image.new('RGB', (1040, 760), '#f0f3f2')
 draw = ImageDraw.Draw(sheet)
 for index, name in enumerate(states):

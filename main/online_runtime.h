@@ -3,7 +3,7 @@
 #include "online_profiles.h"
 typedef struct {
     online_phase_t phase;
-    bool mic,linked,has_ip,audio_ok,feedback_visible,ptt_recording,keep_awake;
+    bool mic,linked,has_ip,audio_ok,feedback_visible,feedback_error,ptt_recording,ptt_capture_started,keep_awake;
     unsigned volume,level;
     char message[128];
     const char *progress; /* Immutable local progress label, or NULL. */

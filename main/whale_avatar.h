@@ -9,3 +9,4 @@
 extern const lv_image_dsc_t *const whale_avatar_frames[ONLINE_AVATAR_COUNT];
 extern const lv_image_dsc_t *const whale_maid_avatar_frames[ONLINE_AVATAR_COUNT];
 extern const lv_image_dsc_t *const claude_avatar_frames[ONLINE_AVATAR_COUNT];
+extern const lv_image_dsc_t *const chatgpt_avatar_frames[ONLINE_AVATAR_COUNT];

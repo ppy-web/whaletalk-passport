@@ -83,25 +83,25 @@ bool online_session_compatible(const char *version, bool input_audio, bool recei
 const char *online_error_text(const char *code) {
     if(!code)return "后端错误，请检查服务配置";
     if(!strcmp(code,"passport-asr-unavailable"))return "请先准备 DSH 语音识别";
-    if(!strcmp(code,"passport-recognition-failed"))return "语音识别失败，请重新说话";
+    if(!strcmp(code,"passport-recognition-failed"))return "语音识别失败";
     if(!strcmp(code,"passport-speech-failed"))return "请检查 DSH 语音合成";
-    if(!strcmp(code,"passport-request-timeout"))return "等待超时，请重新说话";
+    if(!strcmp(code,"passport-request-timeout"))return "等待超时";
     if(!strcmp(code,"passport-session-unavailable") || !strcmp(code,"passport-preset-unavailable"))return "请检查 DSH 对话配置";
     if(!strcmp(code,"passport-preset-changed"))return "请在 DSH 刷新预设";
-    if(!strcmp(code,"passport-speech-too-short"))return "说话太短，请再说一次";
-    if(!strcmp(code,"passport-no-speech"))return "没有听清，请再说一次";
-    if(!strcmp(code,"passport-no-reply"))return "本轮没有可朗读的回复";
-    if(!strcmp(code,"passport-turn-failed"))return "对话失败，请重新提问";
-    if(!strcmp(code,"passport-reply-too-long"))return "回复超出时长，请提问短一些";
-    if(!strcmp(code,"passport-playback-failed"))return "播音中断，请重新提问";
+    if(!strcmp(code,"passport-speech-too-short"))return "说话太短";
+    if(!strcmp(code,"passport-no-speech"))return "没有听清";
+    if(!strcmp(code,"passport-no-reply"))return "没有语音回复";
+    if(!strcmp(code,"passport-turn-failed"))return "对话失败";
+    if(!strcmp(code,"passport-reply-too-long"))return "回复太长";
+    if(!strcmp(code,"passport-playback-failed"))return "播音中断";
     if(!strcmp(code,"passport-asr-key-required"))return "请在 DSH 配置识别密钥";
     if(!strcmp(code,"passport-asr-auth-failed"))return "识别密钥无效，请检查 DSH";
     if(!strcmp(code,"passport-asr-permission-denied"))return "请先开通所选语音识别服务";
     if(!strcmp(code,"passport-asr-quota-exceeded"))return "识别额度不足，请检查账户";
-    if(!strcmp(code,"passport-asr-rate-limited"))return "识别请求过多，请稍后再试";
-    if(!strcmp(code,"passport-asr-timeout"))return "识别超时，请重新说话";
-    if(!strcmp(code,"passport-asr-network-failed"))return "识别网络异常，请重试";
-    if(!strcmp(code,"passport-recording-too-long"))return "录音太长，请分开说";
+    if(!strcmp(code,"passport-asr-rate-limited"))return "识别请求过多";
+    if(!strcmp(code,"passport-asr-timeout"))return "识别超时";
+    if(!strcmp(code,"passport-asr-network-failed"))return "识别网络异常";
+    if(!strcmp(code,"passport-recording-too-long"))return "录音太长";
     return "后端错误，请检查服务配置";
 }
 
@@ -144,7 +144,7 @@ bool online_feedback_result(online_feedback_t *f,const char *turn,const char *re
 void online_feedback_text(const online_feedback_t *f,uint64_t now,char *out,size_t size) {
     const char *text=f->problem?f->problem:"";
     if(!f->problem && f->phase && f->waiting && now>=f->since && now-f->since>=8000 && now-f->since<11000)
-        text="耗时较长，按下键可取消";
+        text="耗时较长，按下键取消";
     snprintf(out,size,"%s",text);
 }
 
@@ -185,7 +185,8 @@ bool online_endpoint_from_ip_port(const char *ip,unsigned port,char *out,size_t 
 }
 
 online_theme_t online_theme_normalize(unsigned stored) {
-    return stored==ONLINE_THEME_WHALE_MAID || stored==ONLINE_THEME_CLAUDE || stored==ONLINE_THEME_BACKGROUND_ONLY
+    return stored==ONLINE_THEME_WHALE_MAID || stored==ONLINE_THEME_CLAUDE ||
+        stored==ONLINE_THEME_BACKGROUND_ONLY || stored==ONLINE_THEME_CHATGPT
         ?(online_theme_t)stored:ONLINE_THEME_WHALE;
 }
 online_background_t online_background_normalize(unsigned stored) {
@@ -248,21 +249,41 @@ online_theme_t online_theme_next(online_theme_t theme) {
     switch(online_theme_normalize(theme)) {
         case ONLINE_THEME_WHALE: return ONLINE_THEME_WHALE_MAID;
         case ONLINE_THEME_WHALE_MAID: return ONLINE_THEME_CLAUDE;
-        case ONLINE_THEME_CLAUDE: return ONLINE_THEME_BACKGROUND_ONLY;
+        case ONLINE_THEME_CLAUDE: return ONLINE_THEME_CHATGPT;
+        case ONLINE_THEME_CHATGPT: return ONLINE_THEME_BACKGROUND_ONLY;
         default: return ONLINE_THEME_WHALE;
     }
 }
-online_avatar_t online_avatar_frame(online_phase_t phase,bool mic,unsigned level,uint64_t now_ms) {
+online_avatar_t online_avatar_frame(online_theme_t theme,online_phase_t phase,bool mic,unsigned level,uint64_t now_ms) {
     if(phase==ONLINE_ERROR)return ONLINE_AVATAR_ERROR;
     if(phase==ONLINE_THINKING) {
+        if(theme==ONLINE_THEME_WHALE)return ONLINE_AVATAR_THINKING;
         /* Bounded 3.2 s loop, at most ~3 frame changes/s. No dependency on
          * server traffic, no return to listening or fabricated completion. */
         unsigned tick=now_ms%3200;
         if(tick>=2200 && tick<2360)return ONLINE_AVATAR_BLINK;
         return tick>=1400 && tick<1800?ONLINE_AVATAR_LISTENING:ONLINE_AVATAR_THINKING;
     }
-    if(phase==ONLINE_SPEAKING)return level>1800 && (now_ms/160)%2?ONLINE_AVATAR_SPEAKING:ONLINE_AVATAR_IDLE;
+    if(phase==ONLINE_SPEAKING) {
+        bool alternate=(now_ms/160)%2;
+        if(theme==ONLINE_THEME_WHALE) {
+            unsigned tick=now_ms%3500;
+            bool mouth_open=level>1800 && !alternate;
+            if(tick>=1200 && tick<1350)
+                return mouth_open?ONLINE_AVATAR_SPEAKING_BLINK:ONLINE_AVATAR_SPEAKING_CLOSED_BLINK;
+            return mouth_open?ONLINE_AVATAR_SPEAKING:ONLINE_AVATAR_SPEAKING_CLOSED;
+        }
+        return level>1800 && alternate?ONLINE_AVATAR_SPEAKING:ONLINE_AVATAR_IDLE;
+    }
     if(mic && (phase==ONLINE_LISTENING || phase==ONLINE_READY))return ONLINE_AVATAR_LISTENING;
+    if(theme==ONLINE_THEME_WHALE) {
+        if(phase==ONLINE_READY || phase==ONLINE_LISTENING) {
+            unsigned tick=now_ms%4600;
+            if(tick>=2650 && tick<3100)return ONLINE_AVATAR_EATING;
+            if(tick>=3100 && tick<3800)return ONLINE_AVATAR_BLINK;
+        }
+        return ONLINE_AVATAR_IDLE;
+    }
     return now_ms%4500<120?ONLINE_AVATAR_BLINK:ONLINE_AVATAR_IDLE;
 }
 

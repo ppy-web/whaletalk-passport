@@ -148,17 +148,20 @@ void online_snapshot(online_status_t *out) {
     /* Progress labels point to immutable strings owned by online_state.c. */
     out->progress=feedback.phase;
     out->feedback_visible=feedback_text[0]!='\0';
+    out->feedback_error=feedback.problem!=NULL;
     if(out->feedback_visible)snprintf(out->message,sizeof(out->message),"%s",feedback_text);
     portEXIT_CRITICAL(&state_lock);
     unsigned mode=atomic_load(&ptt_mode),problem=atomic_load(&ptt_problem);
     out->ptt_recording=mode==PTT_ACTIVE;
+    out->ptt_capture_started=out->ptt_recording && atomic_load(&ptt_audio_started);
     out->keep_awake=runtime_active() || !atomic_load(&theme_storage_available);
-    if(mode==PTT_ACTIVE || mode==PTT_DRAINING || problem) {
-        const char *message=mode==PTT_DRAINING?"正在发送语音":mode==PTT_ACTIVE?
-            (atomic_load(&ptt_audio_started)?"正在录音，松开发送":"准备录音，请继续按住"):
-            problem==1?"连接器不支持对讲":problem==2?"对讲不可用，请检查连接":
-            problem==3?"录音拥塞，请重新说话":"没有听清，请再说一次";
+    if(mode==PTT_ACTIVE)out->feedback_visible=out->feedback_error=false;
+    else if(mode==PTT_DRAINING || problem) {
+        const char *message=mode==PTT_DRAINING?"发送语音":
+            problem==1?"连接器不支持对讲":problem==2?"对讲连接失败":
+            problem==3?"录音拥塞":"没有听清";
         snprintf(out->message,sizeof(out->message),"%s",message);out->feedback_visible=true;
+        out->feedback_error=mode!=PTT_DRAINING;
     }
     out->mic=atomic_load(&mic);out->volume=atomic_load(&volume);out->level=atomic_load(&level);
     out->linked=atomic_load(&connected) && atomic_load(&ready);

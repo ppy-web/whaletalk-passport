@@ -12,9 +12,11 @@ add_executable(preview preview.c "${REPO_ROOT}/main/online_state.c" "${REPO_ROOT
     "${REPO_ROOT}/assets/characters/whale_avatar.c"
     "${REPO_ROOT}/assets/characters/whale_maid_avatar.c"
     "${REPO_ROOT}/assets/characters/claude_avatar.c"
+    "${REPO_ROOT}/assets/characters/chatgpt_avatar.c"
     "${REPO_ROOT}/assets/backgrounds/whale_backgrounds.c"
-    "${REPO_ROOT}/assets/ui/home_foreground.c"
-    "${REPO_ROOT}/assets/fonts/mouthy_bean_zh_12.c" "${REPO_ROOT}/assets/fonts/mouthy_bean_zh_16.c")
+    "${REPO_ROOT}/assets/ui/home_foreground.c" "${REPO_ROOT}/assets/ui/claude_foreground.c" "${REPO_ROOT}/assets/ui/chatgpt_foreground.c"
+    "${REPO_ROOT}/assets/fonts/mouthy_bean_zh_12.c" "${REPO_ROOT}/assets/fonts/mouthy_bean_zh_16.c"
+    "${REPO_ROOT}/assets/fonts/whaletalk_address_20.c")
 target_include_directories(preview PRIVATE "stubs" "${REPO_ROOT}/main")
 target_compile_options(preview PRIVATE -Wall -Wextra -Werror)
 target_link_libraries(preview lvgl)

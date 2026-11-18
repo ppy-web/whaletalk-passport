@@ -81,8 +81,9 @@ independent of the DSH audio protocol:
   `background` (0 = Seaside Tea, 1 = Moonlit Dream, 2 = custom, 3 = off,
   4 = Spring Sakura, 5 = Summer Shore, 6 = Autumn Maple, 7 = Winter Snow) and
   `customBackground` (a usable custom image is present).
-- `GET /background-season.bmp?id=4` serves the Spring Sakura preview as an
-  indexed BMP. IDs 5–7 select the other seasons.
+- `GET /background-day.png`, `GET /background-night.png`, and
+  `GET /background-season.bmp?id=4` through `id=7` serve the display's indexed
+  BMP assets with `Content-Type: image/bmp`.
 - `POST /background/upload` requires the current `X-Setup-Nonce` and exactly
   6,184 binary bytes. WTBG v1 starts with `57 54 42 47 01 60 80 10`, followed
   by sixteen RGB565LE palette entries and 6,144 I4 pixel bytes, high nibble
@@ -107,7 +108,8 @@ The device advertises `voice.feedback`; the connector echoes it only when suppor
 `voice.progress` carries `turnId` and `phase` (`capturing`, `recognizing`, `thinking`, `tool`, `synthesizing`, `playing`). Capturing does not pause the microphone. `voice.result` carries the same `turnId`, a status (`completed`, `cancelled`, `failed`) and an optional stable `code`. Duplicate terminal results and stale progress for settled turns are ignored.
 
 Supported progress phases map to local labels in the home screen's top status line.
-Actionable failure, long-wait and push-to-talk messages take priority over progress;
+Actionable failure, long-wait and push-to-talk send/error messages take priority over progress;
+while holding push-to-talk, the top icon shows preparation or capture instead of text.
 long messages scroll horizontally. No server-provided prose is displayed.
 
 Failure explanations persist across ordinary listening updates until new valid input, a user action or connection failure. Turn failures preserve the microphone and transport, invalidate old playback and schedule one local cue. Arbitrary server prose is never rendered. Fatal protocol/transport failures retain the reconnect path. Legacy recoverable `error` codes are handled locally without requiring new feedback events.

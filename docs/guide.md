@@ -10,7 +10,7 @@ required. The computer must keep DSH running.
 ## Hardware and interface
 
 ESP32-C3, 8 MB Flash, no PSRAM, 240×320 screen, ES8311 audio and three buttons.
-The app uses the official BSP and adapts Qwen Voice Bean's conversation flow. Its on-device name is 鲸语. It defaults to Big Fat Fish (大肥鱼). Whale Girl (鲸鱼娘) and Claude are also available. A Background Only option hides the character and displays the selected background, including custom uploads. All options share setup,
+The app uses the official BSP and adapts Qwen Voice Bean's conversation flow. Its on-device name is 鲸语. It defaults to Big Fat Fish (大肥鱼). Whale Girl (鲸鱼娘), Claude, and the silver-haired ChatGPT dragon girl are also available. A Background Only option hides the character and displays the selected background, including custom uploads. All options share setup,
 connection, ready, listening, thinking, speaking, error and settings screens.
 Main labels and home status use 16px fonts and the provisioning address uses 20px. Chinese labels use compiled font subsets; arbitrary
 model-response transcripts are not displayed.
@@ -19,10 +19,13 @@ The home status line shows connection progress, recording, conversation progress
 or errors at the top center. Longer messages scroll horizontally; errors and
 push-to-talk feedback take priority. To its left, joined/broken chain links show the DSH
 connection. The battery at the right
-fills with its measured charge, turns red at 15% or below, and shows a dash when
-unknown. Normal listening, thinking and speech use a waveform, three dots and a
-speaker at the top center; detailed progress and errors take priority. A translucent
-ocean-themed foreground frames the screen; settings reuse the selected background
+uses three bars for its measured charge, turns green at 100% or red at 15% or below, and shows a dash when
+unknown. A bolt indicates connection to a USB data host as a proxy for external
+power; a wall charger or power bank may not be detected. Normal listening, thinking and speech use a waveform, three dots
+and a speaker at the top center; detailed progress and errors take priority. A translucent
+foreground frames the screen, with warm flowers for Claude, silver-lilac dragon-wing
+ornaments for ChatGPT, and an ocean design for the other views. It follows the selected character automatically;
+settings reuse the selected background
 under a light tint for readability. At the bottom, the volume and microphone
 icons show their current states: a slash means the microphone is off and a crossed
 speaker means muted. Five volume bars represent 25, 50, 75, 90 and 100%, with
@@ -41,7 +44,7 @@ still opens settings.
 Push-to-talk works alongside continuous microphone mode and restores the prior
 microphone setting afterwards. Holding DOWN interrupts a current response. With
 audible cues enabled and volume above zero, wait for the start tone to finish and
-the recording indication before speaking; releasing before readiness discards the
+the top-center waveform before speaking (three dots indicate preparation); releasing before readiness discards the
 recording. The cue and its acoustic tail are not uploaded. With cues disabled or
 muted, local pre-roll is retained; a short cancellation press never uploads it.
 A connector supporting push-to-talk is required; older connectors retain short-press
@@ -75,9 +78,10 @@ Existing single
 profiles remain readable and are imported on the first save or switch, preserving identity,
 backgrounds and the retained conversation.
 
-Thinking cycles through thoughtful, attentive and blinking expressions every
-3.2 seconds, alongside bouncing dots. It remains in the real processing phase
-and DOWN still cancels. The animation itself does not shorten recognition, model or TTS latency.
+Big Fat Fish holds a finger to her chin while thinking. Whale Girl, Claude, and ChatGPT cycle
+through expressions every 3.2 seconds. The bouncing dots indicate processing
+until the reply arrives or DOWN cancels the turn. Response time depends on
+recognition, the model and speech synthesis.
 
 In System settings (系统设置), Background (背景) cycles Seaside Tea, Moonlit Dream, Spring Sakura,
 Summer Shore, Autumn Maple, Winter Snow, an available custom background, and Off (关闭).
@@ -147,10 +151,12 @@ speaker completion is acknowledged. No automatic voice interruption or acoustic
 echo cancellation is provided. Handle tool approvals in DSH.
 
 Hold OK, open System settings (系统设置), and briefly press OK on Interface (界面)
-to cycle Big Fat Fish → Whale Girl → Claude → Background Only. Hold OK again to return home. The choice
+to cycle Big Fat Fish → Whale Girl → Claude → ChatGPT → Background Only. Hold OK again to return home. The choice
 survives restart without changing Wi-Fi, pairing or the conversation. Saving is
 deferred during speech/thinking, and a failed save is shown in settings. Each
 portrait has idle, listening, thinking, speaking, blink and error expressions.
+Big Fat Fish eats rice while idle, moves her mouth and occasionally blinks in
+the smug pose during playback, and shows a deadpan expression when a turn fails.
 See [asset provenance and build details](whale-girl-assets.md).
 
 ## Development and builds

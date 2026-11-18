@@ -1,7 +1,7 @@
 {
   "date": "2026-11-05",
   "tool": "built-in image_gen.imagegen",
-  "active_atlases": [
+  "initial_atlases": [
     "whale-girl-atlas.png",
     "whale-girl-transparent-atlas.png"
   ],
@@ -63,6 +63,83 @@
         "transparent_background": true
       }
     ]
+  },
+  "big_fat_fish": {
+    "date": "2026-11-18",
+    "tool": "built-in image_gen.imagegen",
+    "reference_sha256": {
+      "ganfan.jpg": "2c156e31d4b6709a5eaad82fb328f534daf0b256172e3ba228fd159c719fe9b6",
+      "deyi.jpg": "e84bac6cdc85a115126a4125c7a57e0c9b4e8bfdd69263e401f4cce9658661df",
+      "wuyu.jpg": "7b8f2b75224bf470012b5aa288fec0302f962033369a6ab6ec94bd3df410e36f"
+    },
+    "previous_six_frame_atlas": {
+      "sha256": "7286a060cf6f02dad0326f14828019549ecada8af218e4d5be6d698dc9890753",
+      "reference_sha256": {
+        "bixin.jpg": "d72ced3ff40f54f4925a741e35b13e0f83f68baa4680ddc2f91d1d9a79de503a",
+        "deyi.jpg": "e84bac6cdc85a115126a4125c7a57e0c9b4e8bfdd69263e401f4cce9658661df",
+        "jiazai.jpg": "8963f4c3c81df6b7900aaccdf1fa290e6f211177f80a37a4dccc051a4a276220",
+        "maozhua.jpg": "ede5b3d3d0e1d45a32f62037c9e2bce59a8ed57dc792a73c195e0eab54f21f51",
+        "wenhao.jpg": "fa08aa8730fa2af946007404566ace145a9b61368e52bebd2f2fd6c8831639fd"
+      }
+    },
+    "output": "big-fat-fish-atlas.png",
+    "output_sha256": "271cd7b85126b5076a21be21c588617db95f72bffd2a4ebaff3a226e3fb853bc",
+    "transparent_background": true,
+    "cell_layout": "5x2, 384x512 per cell, idle/listening/thinking/speaking/blink (chew)/error/eating/speaking_closed/speaking_blink/speaking_closed_blink",
+    "portrait_size": [
+      216,
+      288
+    ],
+    "portrait_screen_position": [
+      12,
+      38
+    ],
+    "fade_screen_rows": [
+      295,
+      319
+    ],
+    "flash_bytes": 316858,
+    "steps": [
+      {
+        "inputs": [
+          "previous six-frame atlas",
+          "ganfan.jpg",
+          "deyi.jpg",
+          "wuyu.jpg"
+        ],
+        "output_sha256": "6ed8a3adbf3a1887a508c1574dde57fc6944bd0b6b855a68fa2309373c60443b",
+        "prompt": "Use case: identity-preserve, outpainting, production sprite atlas. Edit the existing Big Fat Fish / 大肥鱼 expression atlas into ONE new animated sprite atlas for a 240x320 companion device. Reference 1 is the previous 3x2 character atlas, the exact character to retain (same sapphire eyes, navy hair with blue tips, short sweeping forelock, white frilly maid headband, white-underlined whale-fin ears, blue bows, navy maid uniform with gold details, navy tail on viewer right). Reference 2 is ganfan.jpg, definitive rice action and prop: navy bowl heaped with white rice held at chest in one hand, brown chopsticks in the other, cute rounded gesture. Reference 3 is deyi.jpg, definitive speaking posture and expression: both eyes confidently CLOSED, a small raised fist by the near cheek, other hand on waist, blushing smug happy OPEN pink mouth. Reference 4 is wuyu.jpg, definitive error: flat droopy half-lidded blue eyes, tiny straight mouth, one small blue anime sweat drop on cheek, arms resting at sides, three small dark vertical exasperation strokes above the character's left fin. All poses are front or very slightly turned as in the originals.\n\nCRITICAL DELIVERABLE: ONE 1536x1024 PNG, exactly FOUR columns and TWO rows of EQUAL 384x512 PORTRAIT cells. Eight sprites total. No gutter, no separators, no grid lines, no drawn labels or text. Tile origins at x=0,384,768,1152 and y=0,512. A genuine hard-clean TRANSPARENT background, including gaps between arms/tail/hair. No shadows, floor, backdrops, emblems, fake transparency, glowing or border effects. Render every character independently within its cell. This is a tight repeatable animation registration with EXACT same face/head/forelock/headband/z-order and exact same waist, skirt and tail position across every cell. Maintain polished chibi sticker anime cel shading with dark clean outlines and cobalt hair glints.\n\nNEW FRAMING, VERY IMPORTANT: Extend the visible character well below the waist in every single frame. Draw a FULL flared navy skirt across the bottom, white ruffled apron with the small whale embroidered near the bottom, white scalloped petticoat hem, restrained gold ribbon and stitching on navy. Draw the entire long right whale tail curling down behind the dress to the same lower level as the dress and then sweeping up to viewer right, matching wuyu. Skirt and tail must fill the lower 30% of each cell. In every cell the forelock starts high at y=15..30, eye line near y=215, waist near y=360, skirt spreads to its lower full width at y=458..480, and the skirt hem and tail bottom reach y=505..510 (only a few pixels clear on the bottom). Full body through the hem, no shoes, no legs, no empty bottom band. Full tail fin and both fin ears stay safely within x=14..370, very large head as on the previous atlas, keep face centered around x=188. Do NOT add a baked-in fade, a white haze, or transparency across the skirt; the device will apply a fade behind its footer to the solid lower skirt. The old atlas's short cut-off waist/fa ding must be removed and extended to the full bottom hem on all eight sprites.\n\nExact tile order, reading left to right:\nTOP 1: RICE REST. Eyes open with tiny closed smile, hold the navy bowl of white rice in front of chest and chopsticks poised just above the rice at her left, matching ganfan.\nTOP 2: LISTEN. Open attentive eyes, closed little mouth, raise two rounded pawlike fists just under each cheek like reference 1's top middle. No bowl.\nTOP 3: THINK. Open sapphire eyes looking slightly left, index finger touching chin like reference 1 top right. No bowl.\nTOP 4: SPEAK OPEN. Match deyi sticker: BOTH eyes closed in two confident happy sweeps, cheek blush, pronounced OPEN happy pink mouth, left hand fist near cheek and right hand on hip. A tiny golden wedge accent to viewer-left optional; no bowl.\nBOTTOM 1: RICE CHEW. Same bowl and body registration as top 1. Chopsticks now level near the corner of the mouth, eyes briefly closed contentedly, puffed little cheeks and CLOSED chewing mouth. No floating rice over the face.\nBOTTOM 2: ERROR. Match wuyu sticker: both half-lidded blue eyes, horizontal deadpan expression, tiny closed neutral mouth, one blue sweat drop, arms lowered, three short cluster strokes above left fin. No bowl and no question mark.\nBOTTOM 3: RICE BITE. Same bowl position as top 1 and same body and eyes. Lift the chopstick tips visibly toward her open pink mouth; a SINGLE discrete tiny clump of white rice pinched between tips near mouth, no giant hand or rice covering face.\nBOTTOM 4: SPEAK CLOSED. Exact visual copy of top 4 down to eyes, hand and hair positions, bow, golden accent and tail. ONLY CHANGE: mouth CLOSED into small pleased smile. No rice bowl. This is the closed mouth counterpart for an animation loop.\n\nDeliver all eight solid shape cutouts with transparent negative space, exact layout, same scale. Preserve full skirts and tails at the bottom and readability of white rice, eyebrows and hands at tiny scale."
+      },
+      {
+        "inputs": [
+          "eight-frame draft",
+          "wuyu.jpg"
+        ],
+        "prompt": "Use case: identity-preserve and precise-object-edit. Image 1 is the 4x2 eight-tile transparent sprite atlas TO EDIT; image 2 is the original full-body wuyu sticker used ONLY as the reference for compact skirt shape, navy Mary Jane shoes, and proportions. Deliver one refined 1536x1024 transparent RGBA atlas. The user wants a shorter skirt and clearly visible feet across all frames. Treat background as transparent alpha, including inside the tail curl and underneath the shoes.\n\nKeep 4 columns x 2 rows of exactly 384x512 equal portrait tiles, row 1 rice-at-rest/listen/think/speak-open and row 2 eyes-closed-rice-chew/deadpan sweat/rice-bite/speak-closed. LOCK pixel registration and keep all existing hair, head, expressions, props and poses in all eight from the waist UP. In particular rice bowl, chopsticks and their actions in tiles 1/5/7, fist with closed eyes and different mouth shapes in 4/8, the deadpan eyes and sweat drop in 6. Preserve the existing facial positions, no global scaling, no moving sprite origins and no new characters.\n\nMake a targeted outfit edit strictly below the waist: substantially shorten the dress and make it a compact flared short maid skirt like image 2 (around 30% shorter in vertical length than it is in image 1). Keep the white ruffled apron with little blue whale, trim its bottom higher together with the navy gold-trim hem. Draw a small crisp white scalloped petticoat. At y=421–450 of each tile the short hem should end, exposing two little white sock cuffs, and two clearly separate navy rounded Mary Jane shoes as in image 2, sitting around y=452–473 of each tile. Both distinct shoes are visible below the skirt and centered under her hips, regular small chibi limbs with no long exposed legs. Keep the same fully visible skirt, shoes and waist positions in all eight tiles even with different expressions. Keep the existing wide right-hand whale tail silhouette, including its curved low base behind the skirt, gently swooping down on viewer right to y=491–503 and back up to the fin. The tail may reach a bit lower than the two shoes, helping the portrait composition fill the lower right. Keep tail entirely inside each tile. Use the same navy outline, subtle gold ribbon details, and polished clean cel-shaded sticker art. Avoid a long ballgown, giant shoes, new dress details, text, UI, shadows or a painted backdrop. No fade or haze over the shoes; the firmware will alpha-fade the very bottom of the composition. Keep the remaining space exterior to each character genuinely transparent."
+      },
+      {
+        "inputs": [
+          "previous eight-frame atlas"
+        ],
+        "input_sha256": "8abfda8a8e832fd1bac4a66eb9cab7e5d55c63866774a0193578abe2633a88e1",
+        "generated_sha256": "feb47fc7dd279afb4cc0c2af1c859c08d949705815f2f91839c779489ff03760",
+        "edit": "Open the eyes on the two speaking tiles. Repack the two edited speaking tiles alongside the original six other poses and both closed-eye speaking poses.",
+        "prompt": "Use case: identity-preserve, precise-object-edit. Edit Image 1, the existing production 1536x1024, 4-column by 2-row PNG atlas for this exact navy-haired chibi whale maid. Output the SAME 1536×1024 atlas, eight cells, each 384×512, with transparency. The sole edit is to OPEN BOTH EYES on the two speaking poses in the far-right column (tile top-right and tile bottom-right). These are going to alternate with the pre-existing closed-eye poses in a real blink animation on a tiny screen. Give the speaking poses the same two unmistakably open, lively sapphire blue eyes with small white highlights as the existing listening pose in top row, second column. Match their original locations, shapes, size, and the existing slightly confident warm expression. Both eyes fully OPEN in BOTH edited cells: blue irises, black pupils, white shines, visibly raised upper eyelids. No wink. Keep existing brows, cheek blush, bangs and head angle. The upper/right girl's original cheerful open mouth MUST stay OPEN, same shape, tongue, and position. The lower/right girl's original small pleased closed-mouth smile MUST stay CLOSED, same shape and position. Edit eye regions only, with each head at the very same pixel coordinates and same size so the old and new sprites line up without motion. Keep exactly the same gold three marks, raised fist, navy outfit, hem, paired blue shoes, tail, silhouette, outline weight and all colors, and leave all other six sprites untouched. No re-layout, global scaling, extra motion, text, shadows or background. Return a clean true-alpha PNG with the exact grid."
+      }
+    ]
+  },
+  "chatgpt": {
+    "date": "2026-11-18",
+    "tool": "built-in image_gen.imagegen",
+    "input": "148186519_p3_master1200.jpg",
+    "input_sha256": "56f9a966f8d3e70d1957898615d3ffb676b9594cfdd74663ac7679e9f81abcfa",
+    "output": "chatgpt-atlas.png",
+    "output_sha256": "fd2824c5252514ff979a1674d987b858cecb4d3c7ee8fc81cef6d5b4f271c2e6",
+    "actual_canvas": [1536, 1024],
+    "transparent_background": true,
+    "frame_order": ["idle", "listening", "thinking", "speaking", "blink", "error"],
+    "flash_bytes": 207940,
+    "prompt": "Use case: stylized-concept. Create one transparent production expression atlas of the silver-haired dragon girl in the supplied image, specifically to draw on a 240x320 ESP32 voice companion device. The input is the exact sole CHARACTER AND COSTUME reference. Preserve the long flowing silver-white hair and curling central cowlick, identical pair of segmented ivory dragon horns leaning up/out, cool lilac eyes with long lashes, white interwoven knot hair ornament at viewer right, pointed ears with a pendant earring, pale ivory fitted dress with high collar and separate soft fabric sleeves, subtle silver ornament and pastel lavender dragon wing shapes behind the shoulders. Keep the precise palette of white, cool lilac shadow, and purple-black anime ink. This is a gentle, slightly reserved chibi version of the original female character. Large expressive face, clean strong silhouettes and simplified anime cel shading for a tiny screen. Waist-up, directly front-facing. Both horns fully visible in each frame and contour stays within safe area. Relaxed shoulders, hands outside crop. Her paired wing tips can be smaller around her shoulders to clear the edges. The image contains only the dragon girl. \n\nProduce ONE 1536x1024 LANDSCAPE PNG with EXACTLY 3 columns and 2 rows and six equal SQUARE 512x512 cells, fixed strict grid. The tile origins are x=0,512,1024 and y=0,512. Keep the exact same camera, zoom, hair, horns, head angle, shoulders, dress, and body registered within each square. Copy that same portrait as a rigid layer across all six cells and vary only eyes, eyebrows, and mouth. Transparent cutouts with genuine alpha. No texture outside the shape. Keep transparent safe margins of about 40px to left/right (x=40..472), about 16px above horn tips (y=16..36), and avoid overlap into other cells, thin transparent row separation. Center face horizontally with eyes at y=250..275. The waist-up costume and hair fill vertically to y=502..508. No rigid bottom shadow or outer glow. No graphics, particles, text, watermark, user interface, framing, scenery or blue mascot.\n\nExactly six visible expressions, in this order reading left to right: TOP LEFT = IDLE, open relaxed purple eyes looking at viewer and tiny closed-mouth smile. TOP MIDDLE = LISTENING, lightly lifted eyebrows and distinctly attentive wide-open eyes, small neutral closed mouth. TOP RIGHT = THINKING, pupils move obviously up and to her left, one subtly lowered brow, small pursed mouth. BOTTOM LEFT = SPEAKING, eyes gently open and mouth visibly open, friendly clear mouth shape no teeth clutter. BOTTOM MIDDLE = BLINK, exactly the idle pose with BOTH eyes gently closed as two ink lash arcs, same small closed smile. BOTTOM RIGHT = ERROR, sympathetic worried eyebrows slanted upward towards the center, eyes looking a little down, small downturned mouth. Keep the face reading differently at a glance without any symbols or stickers. White costume regions remain solid and opaque with the surrounding space fully transparent. Repeated portrait alignment for smooth animation is the most important technical constraint."
   },
   "composition": {
     "portrait_size": [

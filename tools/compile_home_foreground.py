@@ -6,8 +6,11 @@ from PIL import Image
 from compile_whale_avatar import pack_row
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / 'assets/ui/home-foreground.png'
-OUTPUT = ROOT / 'assets/ui/home_foreground.c'
+ASSETS = (
+    ('home-foreground.png', 'home_foreground.c', 'home_foreground'),
+    ('claude-foreground.png', 'claude_foreground.c', 'claude_foreground'),
+    ('chatgpt-foreground.png', 'chatgpt_foreground.c', 'chatgpt_foreground'),
+)
 WIDTH, HEIGHT = 240, 320
 REGIONS = (('top', 0, 35), ('bottom', 268, 320))
 
@@ -31,8 +34,8 @@ def compile_region(image):
     return data + struct.pack(f'<{len(offsets)}H', *offsets) + rows
 
 
-def main():
-    with Image.open(SOURCE) as source:
+def compile_asset(source_path, output_path, symbol):
+    with Image.open(source_path) as source:
         if source.mode != 'RGBA' or source.width * 4 != source.height * 3:
             raise ValueError('Expected a transparent, portrait 3:4 source')
         image = source.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
@@ -45,12 +48,17 @@ def main():
         output.append(f'static const uint8_t LV_ATTRIBUTE_MEM_ALIGN {name}_pixels[] = {{')
         for offset in range(0, len(data), 32):
             output.append('  ' + ','.join(f'0x{value:02x}' for value in data[offset:offset + 32]) + ',')
-        output.extend(['};', f'const lv_image_dsc_t home_foreground_{name} = {{',
+        output.extend(['};', f'const lv_image_dsc_t {symbol}_{name} = {{',
                        '  .header = { .magic = LV_IMAGE_HEADER_MAGIC, .cf = LV_COLOR_FORMAT_RAW,',
                        f'    .w = {WIDTH}, .h = {bottom-top} }},',
                        f'  .data_size = sizeof({name}_pixels), .data = {name}_pixels,', '};', ''])
-    OUTPUT.write_text('\n'.join(output), encoding='utf-8')
-    print(f'Compiled {OUTPUT}: {total:,} bytes')
+    output_path.write_text('\n'.join(output), encoding='utf-8')
+    print(f'Compiled {output_path}: {total:,} bytes')
+
+
+def main():
+    for source, output, symbol in ASSETS:
+        compile_asset(ROOT / 'assets/ui' / source, ROOT / 'assets/ui' / output, symbol)
 
 
 if __name__ == '__main__':

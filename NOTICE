@@ -12,14 +12,31 @@ Copyright (c) 2026 FoloToy, MIT License (see LICENSE).
 Source Han Sans font subsets are licensed under SIL Open Font License 1.1.
 See assets/fonts/OFL-SourceHanSansSC.txt.
 
+The provisioning address font is a subset of Montserrat Medium, sourced from
+LVGL and licensed under SIL Open Font License 1.1.
+See assets/fonts/OFL-Montserrat.txt.
+
+The battery and charging symbols are adapted from Lucide's battery-full and
+battery-charging icons, Copyright (c) Lucide Contributors, ISC License.
+See assets/ui/Lucide-ISC.txt.
+
 ESP-IDF and Managed Components retain their own licenses in the installed
 toolchain and managed_components directories. They are downloaded during setup
 and build, and are not vendored into this source tree.
 
-Whale Girl character reference was supplied from the companion plugin's
-assets/whale-girl-front.png. The expression atlas was generated with built-in
-imagegen using that reference. See docs/whale-girl-assets.md for provenance,
-the generation prompt and deterministic device-format conversion.
+The original Big Fat Fish character reference was supplied from the companion
+plugin's assets/whale-girl-front.png. Its expression atlas was generated with
+built-in imagegen. See docs/whale-girl-assets.md for provenance and device-format
+conversion.
+
+The current Big Fat Fish expression atlas was generated with built-in imagegen
+using the user-supplied ganfan.jpg, deyi.jpg and wuyu.jpg stickers and the
+previous Big Fat Fish atlas. See assets/characters/generation.json for reference
+hashes and generation prompts.
+
+The ChatGPT dragon girl expression atlas was generated with built-in imagegen
+from the user-supplied 148186519_p3_master1200.jpg character illustration.
+See assets/characters/generation.json for the reference hash and prompt.
 
 Downloadable custom-background examples in assets/backgrounds/examples/ were
 generated with built-in imagegen and resized with Pillow on 2026-11-05. They

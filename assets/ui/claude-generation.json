@@ -1,0 +1,9 @@
+{
+  "asset": "claude-foreground.png",
+  "tool": "OpenAI built-in image generation",
+  "date": "2026-11-18",
+  "purpose": "Transparent warm floral home foreground for the Claude character, with the center left clear.",
+  "references": ["Claude LVGL synthetic home preview", "home-foreground.png composition"],
+  "prompt": "Create a transparent portrait 3:4 foreground overlay for a 240x320 companion screen. Match Claude's auburn hair, dark brown ribbon, ivory dress and sunflower accessory. Use narrow warm ivory and amber fabric-like curves with delicate floral and ribbon accents at the upper corners, and soft cream and apricot ribbons with small warm flowers at the lower edge. Leave the center transparent and the bottom center pale for status icons. No sea motifs, background, people, text, icons, UI, watermark or border.",
+  "build": "tools/compile_home_foreground.py downsamples the source and encodes two edge regions using the shared RGB565/A8 palette and row format."
+}

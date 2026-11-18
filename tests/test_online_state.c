@@ -91,6 +91,8 @@ static void test_voice_feedback(void) {
     online_feedback_text(&f,20000,text,sizeof(text));assert(text[0]);
     assert(online_feedback_progress(&f,"two","capturing",21000) && !f.problem);
     assert(online_feedback_result(&f,"two","cancelled",""));assert(!f.problem);
+    assert(!strcmp(online_error_text("passport-speech-too-short"),"说话太短"));
+    assert(!strcmp(online_error_text("passport-no-speech"),"没有听清"));
     assert(online_error_recoverable("passport-asr-auth-failed"));
     assert(online_error_recoverable("passport-recognition-failed"));
     assert(!online_error_recoverable("passport-protocol-mismatch"));
@@ -283,7 +285,8 @@ int main(void) {
     assert(online_theme_normalize(1)==ONLINE_THEME_WHALE);
     assert(online_theme_next(ONLINE_THEME_WHALE)==ONLINE_THEME_WHALE_MAID);
     assert(online_theme_next(ONLINE_THEME_WHALE_MAID)==ONLINE_THEME_CLAUDE);
-    assert(online_theme_next(ONLINE_THEME_CLAUDE)==ONLINE_THEME_BACKGROUND_ONLY);
+    assert(online_theme_next(ONLINE_THEME_CLAUDE)==ONLINE_THEME_CHATGPT);
+    assert(online_theme_next(ONLINE_THEME_CHATGPT)==ONLINE_THEME_BACKGROUND_ONLY);
     assert(online_theme_next(ONLINE_THEME_BACKGROUND_ONLY)==ONLINE_THEME_WHALE);
     assert(online_background_normalize(255)==ONLINE_BACKGROUND_DAY);
     assert(online_background_next(ONLINE_BACKGROUND_DAY,false)==ONLINE_BACKGROUND_NIGHT);
@@ -307,18 +310,31 @@ int main(void) {
     bool expressions[ONLINE_AVATAR_COUNT]={0};
     unsigned changes=0;online_avatar_t previous=ONLINE_AVATAR_THINKING;
     for(uint64_t now=0;now<60000;now+=50) {
-        online_avatar_t frame=online_avatar_frame(ONLINE_THINKING,true,0,now);
+        online_avatar_t frame=online_avatar_frame(ONLINE_THEME_WHALE_MAID,ONLINE_THINKING,true,0,now);
         expressions[frame]=true;if(frame!=previous)changes++;previous=frame;
         assert(frame!=ONLINE_AVATAR_SPEAKING && frame!=ONLINE_AVATAR_ERROR);
-        assert(frame==online_avatar_frame(ONLINE_THINKING,true,0,now+3200));
+        assert(frame==online_avatar_frame(ONLINE_THEME_WHALE_MAID,ONLINE_THINKING,true,0,now+3200));
     }
     assert(expressions[ONLINE_AVATAR_THINKING] && expressions[ONLINE_AVATAR_BLINK] && expressions[ONLINE_AVATAR_LISTENING]);
     assert(changes>20 && changes<100);
     for(unsigned phase=0;phase<=ONLINE_ERROR;phase++)for(unsigned mic=0;mic<2;mic++) {
         for(uint64_t now=0;now<10000;now+=137) {
-            online_avatar_t frame=online_avatar_frame((online_phase_t)phase,mic!=0,65535,now);
+            online_avatar_t frame=online_avatar_frame(ONLINE_THEME_WHALE_MAID,(online_phase_t)phase,mic!=0,65535,now);
             assert(frame>=ONLINE_AVATAR_IDLE && frame<ONLINE_AVATAR_COUNT);
         }
     }
+    assert(online_avatar_frame(ONLINE_THEME_WHALE,ONLINE_READY,false,0,2649)==ONLINE_AVATAR_IDLE);
+    assert(online_avatar_frame(ONLINE_THEME_WHALE,ONLINE_READY,false,0,2650)==ONLINE_AVATAR_EATING);
+    assert(online_avatar_frame(ONLINE_THEME_WHALE,ONLINE_READY,false,0,3100)==ONLINE_AVATAR_BLINK);
+    assert(online_avatar_frame(ONLINE_THEME_WHALE,ONLINE_READY,false,0,3800)==ONLINE_AVATAR_IDLE);
+    assert(online_avatar_frame(ONLINE_THEME_WHALE,ONLINE_READY,true,0,2650)==ONLINE_AVATAR_LISTENING);
+    assert(online_avatar_frame(ONLINE_THEME_WHALE,ONLINE_SPEAKING,true,1801,0)==ONLINE_AVATAR_SPEAKING);
+    assert(online_avatar_frame(ONLINE_THEME_WHALE,ONLINE_SPEAKING,true,1800,0)==ONLINE_AVATAR_SPEAKING_CLOSED);
+    assert(online_avatar_frame(ONLINE_THEME_WHALE,ONLINE_SPEAKING,true,1801,1199)==ONLINE_AVATAR_SPEAKING_CLOSED);
+    assert(online_avatar_frame(ONLINE_THEME_WHALE,ONLINE_SPEAKING,true,1801,1200)==ONLINE_AVATAR_SPEAKING_CLOSED_BLINK);
+    assert(online_avatar_frame(ONLINE_THEME_WHALE,ONLINE_SPEAKING,true,1801,1300)==ONLINE_AVATAR_SPEAKING_BLINK);
+    assert(online_avatar_frame(ONLINE_THEME_WHALE,ONLINE_SPEAKING,true,1800,1300)==ONLINE_AVATAR_SPEAKING_CLOSED_BLINK);
+    assert(online_avatar_frame(ONLINE_THEME_WHALE,ONLINE_SPEAKING,true,1801,1350)==ONLINE_AVATAR_SPEAKING);
+    assert(online_avatar_frame(ONLINE_THEME_WHALE,ONLINE_SPEAKING,true,0,4700)==ONLINE_AVATAR_SPEAKING_CLOSED_BLINK);
     puts("Online configuration, theme navigation and frame bounds: PASS");
 }

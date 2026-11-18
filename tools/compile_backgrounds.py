@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compile shared indexed BMP backgrounds and compatible PNG web previews."""
+"""Compile indexed BMPs shared by the display and portal, and export reference PNGs."""
 from io import BytesIO
 from pathlib import Path
 from struct import unpack_from

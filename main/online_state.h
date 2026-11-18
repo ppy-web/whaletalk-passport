@@ -9,7 +9,7 @@ typedef enum { ONLINE_SETUP, ONLINE_CONNECTING, ONLINE_READY, ONLINE_LISTENING,
 /* Stored value 1 belonged to the removed theme; keep remaining IDs stable. */
 typedef enum {
     ONLINE_THEME_WHALE=0, ONLINE_THEME_WHALE_MAID=2, ONLINE_THEME_CLAUDE=3, ONLINE_THEME_BACKGROUND_ONLY=4,
-    ONLINE_THEME_COUNT
+    ONLINE_THEME_CHATGPT=5, ONLINE_THEME_COUNT
 } online_theme_t;
 online_theme_t online_theme_normalize(unsigned stored);
 online_theme_t online_theme_next(online_theme_t theme);
@@ -22,8 +22,11 @@ typedef enum {
 online_background_t online_background_normalize(unsigned stored);
 online_background_t online_background_next(online_background_t current,bool has_custom);
 typedef enum { ONLINE_AVATAR_IDLE, ONLINE_AVATAR_LISTENING, ONLINE_AVATAR_THINKING,
-    ONLINE_AVATAR_SPEAKING, ONLINE_AVATAR_BLINK, ONLINE_AVATAR_ERROR, ONLINE_AVATAR_COUNT } online_avatar_t;
-online_avatar_t online_avatar_frame(online_phase_t phase,bool mic,unsigned level,uint64_t now_ms);
+    ONLINE_AVATAR_SPEAKING, ONLINE_AVATAR_BLINK, ONLINE_AVATAR_ERROR,
+    ONLINE_AVATAR_EATING, ONLINE_AVATAR_SPEAKING_CLOSED, ONLINE_AVATAR_SPEAKING_BLINK,
+    ONLINE_AVATAR_SPEAKING_CLOSED_BLINK, ONLINE_AVATAR_COUNT } online_avatar_t;
+/* For the Big Fat Fish speaking pose, now_ms is elapsed time in the pose. */
+online_avatar_t online_avatar_frame(online_theme_t theme,online_phase_t phase,bool mic,unsigned level,uint64_t now_ms);
 unsigned online_volume_next(unsigned current);
 unsigned online_volume_normalize(unsigned stored);
 #define ONLINE_VOLUME_DEFAULT 75

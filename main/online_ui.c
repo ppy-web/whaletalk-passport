@@ -16,6 +16,7 @@
 #include <string.h>
 LV_FONT_DECLARE(mouthy_bean_zh_12);
 LV_FONT_DECLARE(mouthy_bean_zh_16);
+LV_FONT_DECLARE(whaletalk_address_20);
 #define YELLOW 0xA7E8DC
 #define INK 0x173E3A
 #define PAPER 0xE9F8F3
@@ -28,6 +29,7 @@ static const theme_style_t theme_styles[ONLINE_THEME_COUNT]={
     [ONLINE_THEME_WHALE]={"界面：大肥鱼",0xE7F0FF,0xF5FAFF,0xCCDDF0,0xD9EDFF,0x2F6FA7},
     [ONLINE_THEME_WHALE_MAID]={"界面：鲸鱼娘",0xE7F0FF,0xF5FAFF,0xCCDDF0,0xD9EDFF,0x2F6FA7},
     [ONLINE_THEME_CLAUDE]={"界面：Claude",0xFFF0DF,0xFFF8EE,0xECD1B6,0xFBE4CE,0x925325},
+    [ONLINE_THEME_CHATGPT]={"界面：ChatGPT",0xEEE9FA,0xFAF8FF,0xDCD3ED,0xE9DFF7,0x625084},
     [ONLINE_THEME_BACKGROUND_ONLY]={"界面：仅背景",0xE7F0FF,0xF5FAFF,0xCCDDF0,0xD9EDFF,0x2F6FA7},
 };
 enum { SETTINGS_ROWS = ONLINE_MENU_COUNT };
@@ -46,7 +48,7 @@ static const struct {
 };
 static lv_obj_t *title,*header,*footer,*setup_panel,*setup_text;
 static lv_obj_t *setup_qr[2];
-static lv_obj_t *home_controls,*background_image,*settings_list;
+static lv_obj_t *home_controls,*home_icon_backing,*background_image,*settings_list;
 static lv_obj_t *home_foreground_top_obj,*home_foreground_bottom_obj;
 static ui_icon_t link_icon,battery_icon,phase_icon,volume_icon;
 static ui_icon_t action_mic;
@@ -158,6 +160,7 @@ static const char *home_status_text(const online_status_t *s) {
         return s->message[0]?s->message:online_phase_text(s->phase);
     if(!s->audio_ok)return "音频不可用，请检查设备";
     if(!s->linked)return "后端未连接";
+    if(s->ptt_recording)return "";
     if(s->progress && s->progress[0])return s->progress;
     if(s->phase==ONLINE_THINKING)return "正在思考";
     if(s->phase==ONLINE_SPEAKING)return "正在回答";
@@ -263,6 +266,15 @@ static void refresh(lv_timer_t *timer) {
         lv_obj_set_style_bg_color(app_screen,lv_color_hex(style->base),0);
         lv_obj_set_style_bg_color(settings_layer,lv_color_hex(style->base),0);
         lv_obj_set_style_bg_color(configuration,lv_color_hex(style->card),0);
+        bool full_body=theme==ONLINE_THEME_WHALE;
+        /* Keep both shoes clear of the controls and the wave decoration. */
+        lv_obj_move_to_index(home_foreground_bottom_obj,full_body?lv_obj_get_index(portrait_layer):
+            lv_obj_get_index(home_controls)-1);
+        visibility(home_icon_backing,!full_body);
+        lv_obj_set_x(volume_icon.obj,full_body?25:87);
+        lv_obj_set_x(action_mic.obj,full_body?195:132);
+        lv_obj_set_style_bg_opa(volume_icon.obj,full_body?LV_OPA_70:LV_OPA_TRANSP,0);
+        lv_obj_set_style_bg_opa(action_mic.obj,full_body?LV_OPA_70:LV_OPA_TRANSP,0);
         applied_theme=theme;
     }
     bool show_overlay=!home || setup || s.overlay;
@@ -276,9 +288,9 @@ static void refresh(lv_timer_t *timer) {
     }
     const char *status=home?home_status_text(&s):"";
     bool phase_status=home && !setup && s.overlay && buttons_available && !s.feedback_visible &&
-        !(s.progress && s.progress[0]) &&
+        (s.ptt_recording || !(s.progress && s.progress[0])) &&
         (!status[0] || !strcmp(status,"正在思考") || !strcmp(status,"正在回答")) &&
-        (s.phase==ONLINE_THINKING || s.phase==ONLINE_SPEAKING ||
+        (s.ptt_recording || s.phase==ONLINE_THINKING || s.phase==ONLINE_SPEAKING ||
          s.phase==ONLINE_LISTENING || (s.phase==ONLINE_READY && s.mic));
     if(home) {
         if(show_overlay)home_status_update(phase_status?"":status);
@@ -290,6 +302,12 @@ static void refresh(lv_timer_t *timer) {
         text_changed(title,pages[menu.page]);
     }
     visibility(header,show_overlay && (!home || setup));visibility(title,show_overlay);
+    const lv_image_dsc_t *foreground_top=theme==ONLINE_THEME_CLAUDE?&claude_foreground_top:
+        theme==ONLINE_THEME_CHATGPT?&chatgpt_foreground_top:&home_foreground_top;
+    const lv_image_dsc_t *foreground_bottom=theme==ONLINE_THEME_CLAUDE?&claude_foreground_bottom:
+        theme==ONLINE_THEME_CHATGPT?&chatgpt_foreground_bottom:&home_foreground_bottom;
+    if(lv_image_get_src(home_foreground_top_obj)!=foreground_top)lv_image_set_src(home_foreground_top_obj,foreground_top);
+    if(lv_image_get_src(home_foreground_bottom_obj)!=foreground_bottom)lv_image_set_src(home_foreground_bottom_obj,foreground_bottom);
     visibility(home_foreground_top_obj,home && !setup && s.overlay);
     visibility(home_foreground_bottom_obj,home && !setup && s.overlay && buttons_available);
     visibility(link_icon.obj,show_overlay);visibility(battery_icon.obj,show_overlay);
@@ -317,14 +335,23 @@ static void refresh(lv_timer_t *timer) {
     ui_icon_update(&link_icon,UI_LINK,s.linked,s.linked?0x28715E:INK);
     ui_icon_update(&action_mic,UI_MIC,s.mic || s.ptt_recording,INK);
     ui_icon_update(&volume_icon,UI_VOLUME_LEVEL,s.volume,INK);
-    ui_icon_kind_t phase=s.phase==ONLINE_THINKING?UI_THINKING:
-        s.phase==ONLINE_SPEAKING?UI_VOLUME:UI_LISTEN;
-    ui_icon_update(&phase_icon,phase,s.phase==ONLINE_THINKING?(int)((now/350)%3):s.phase==ONLINE_SPEAKING?100:s.mic,INK);
+    ui_icon_kind_t phase=s.ptt_recording?(s.ptt_capture_started?UI_LISTEN:UI_THINKING):
+        s.phase==ONLINE_THINKING?UI_THINKING:s.phase==ONLINE_SPEAKING?UI_VOLUME:UI_LISTEN;
+    ui_icon_update(&phase_icon,phase,phase==UI_THINKING?(int)((now/350)%3):phase==UI_VOLUME?100:(s.mic || s.ptt_recording),INK);
+    static bool whale_speaking;
+    static uint64_t speaking_since;
     if(home && !setup && theme!=ONLINE_THEME_BACKGROUND_ONLY) {
-        online_avatar_t frame=online_avatar_frame(s.phase,s.mic || s.ptt_recording,s.level,now);
+        online_phase_t portrait_phase=s.phase;
+        if(theme==ONLINE_THEME_WHALE && (!s.audio_ok || !buttons_available ||
+           (s.feedback_visible && s.feedback_error)))portrait_phase=ONLINE_ERROR;
+        bool speaking=theme==ONLINE_THEME_WHALE && portrait_phase==ONLINE_SPEAKING;
+        if(speaking && !whale_speaking)speaking_since=now;
+        whale_speaking=speaking;
+        uint64_t animation_ms=speaking?now-speaking_since:now;
+        online_avatar_t frame=online_avatar_frame(theme,portrait_phase,s.mic || s.ptt_recording,s.level,animation_ms);
         const lv_image_dsc_t *source=whale_avatar_view_source(theme,frame);
         if(lv_image_get_src(portrait_image)!=source)lv_image_set_src(portrait_image,source);
-    }
+    } else whale_speaking=false;
     visibility(footer,home && setup);visibility(settings_layer,!home);
     if(menu.page!=ONLINE_SETTINGS && bouncing_card)stop_bounce();
     unsigned menu_count=online_menu_items(&menu);
@@ -443,11 +470,20 @@ static void refresh(lv_timer_t *timer) {
         text_changed(footer,hint);
     }
 }
+static int last_battery_charging=-2;
 static void update_battery(lv_timer_t *timer) {
     (void)timer;if(atomic_load(&screen_asleep))return;
     int soc=bsp_battery_soc();
     if(soc>100)soc=100;
-    ui_icon_update(&battery_icon,UI_BATTERY,soc,soc>=0 && soc<=15?0xA84141:INK);
+    int charging=bsp_battery_charging();
+    last_battery_charging=charging;
+    uint32_t color=soc==100?0x287B4D:soc>=0 && soc<=15?0xA84141:INK;
+    ui_icon_update(&battery_icon,charging==1?UI_BATTERY_CHARGING:UI_BATTERY,soc,color);
+}
+static void update_usb_connection(lv_timer_t *timer) {
+    (void)timer;
+    if(!atomic_load(&screen_asleep) && bsp_battery_charging()!=last_battery_charging)
+        update_battery(NULL);
 }
 void online_ui_enter(bool buttons_ok) {
     buttons_available=buttons_ok;
@@ -465,7 +501,7 @@ void online_ui_enter(bool buttons_ok) {
     lv_obj_move_to_index(header,1);
     lv_obj_move_foreground(title);
     ui_icon_create(screen,&link_icon,UI_LINK,10,8,20);
-    ui_icon_create(screen,&battery_icon,UI_BATTERY,202,6,28);
+    ui_icon_create(screen,&battery_icon,UI_BATTERY,210,8,20);
     portrait_layer=shape(screen,0,WHALE_VIEW_TOP,WHALE_VIEW_WIDTH,WHALE_VIEW_HEIGHT,0xE7F0FF,0);
     lv_obj_set_style_bg_opa(portrait_layer,LV_OPA_TRANSP,0);
     portrait_image=lv_image_create(portrait_layer);
@@ -483,7 +519,7 @@ void online_ui_enter(bool buttons_ok) {
     label(setup_panel,"1. 连热点",8,62,96,22,false,INK);
     label(setup_panel,"2. 打开网页",120,62,96,22,false,INK);
     lv_obj_t *address=label(setup_panel,"192.168.4.1",8,191,208,25,false,INK);
-    lv_obj_set_style_text_font(address,&lv_font_montserrat_20,0);
+    lv_obj_set_style_text_font(address,&whaletalk_address_20,0);
     label(setup_panel,"热点无需密码",8,218,208,15,true,INK);
     label(setup_panel,HELP_QQ,8,233,208,15,true,INK);
     footer=label(screen,"长按确定进入设置",12,294,216,22,false,INK);
@@ -495,11 +531,15 @@ void online_ui_enter(bool buttons_ok) {
     lv_obj_set_pos(home_controls,0,284);lv_obj_set_size(home_controls,240,26);
     /* A translucent, borderless backing keeps both dark icons readable over
      * arbitrary custom pictures while letting the foreground show through. */
-    lv_obj_t *icon_backing=shape(home_controls,78,0,84,26,0xF0FAFF,13);
-    lv_obj_remove_flag(icon_backing,LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_set_style_bg_opa(icon_backing,LV_OPA_70,0);
+    home_icon_backing=shape(home_controls,78,0,84,26,0xF0FAFF,13);
+    lv_obj_remove_flag(home_icon_backing,LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_style_bg_opa(home_icon_backing,LV_OPA_70,0);
     ui_icon_create(home_controls,&volume_icon,UI_VOLUME_LEVEL,87,3,20);
     ui_icon_create(home_controls,&action_mic,UI_MIC,132,3,20);
+    lv_obj_set_style_bg_color(volume_icon.obj,lv_color_hex(0xF0FAFF),0);
+    lv_obj_set_style_bg_color(action_mic.obj,lv_color_hex(0xF0FAFF),0);
+    lv_obj_set_style_radius(volume_icon.obj,LV_RADIUS_CIRCLE,0);
+    lv_obj_set_style_radius(action_mic.obj,LV_RADIUS_CIRCLE,0);
     settings_layer=shape(screen,0,35,240,285,YELLOW,0);
     settings_help=label(settings_layer,"",8,0,224,22,false,INK);
     configuration=shape(settings_layer,12,12,216,194,PAPER,12);
@@ -528,6 +568,7 @@ void online_ui_enter(bool buttons_ok) {
     refresh(NULL);update_battery(NULL);lv_screen_load(screen);
     /* One application-lifetime screen. Workers never retain LVGL objects. */
     lv_timer_create(refresh,50,NULL);lv_timer_create(update_battery,15000,NULL);
+    lv_timer_create(update_usb_connection,1000,NULL);
 }
 void online_ui_key(bsp_btn_t key,bsp_btn_ev_t ev) {
     /* This callback owns the gesture flag. RELEASE precedes CLICK, so retain it

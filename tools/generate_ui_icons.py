@@ -52,14 +52,14 @@ class Icon:
                   for angle in range(start, end + 1, 3)]
         self.line(points, width)
 
-    def curve(self, p0, p1, p2, p3):
+    def curve(self, p0, p1, p2, p3, width=1.9):
         points = []
         for step in range(17):
             t = step / 16
             points.append(tuple((1-t)**3*p0[i] + 3*(1-t)**2*t*p1[i] +
                                 3*(1-t)*t*t*p2[i] + t**3*p3[i]
                                 for i in range(2)))
-        self.line(points)
+        self.line(points, width)
 
     def bytes(self):
         return self.image.resize((self.width, self.height), Image.Resampling.LANCZOS).tobytes()
@@ -168,10 +168,25 @@ def settings_icons():
 def make_icons():
     icons = {'link_off': link(False), 'link_on': link(True),
              'mic_off': microphone(False), 'mic_on': microphone(True)}
-    icon = Icon(28, 28)
-    icon.rounded_rect((1.5, 6.5, 20, 17.5), 2.8, 1.7)
-    icon.rounded_rect((21.5, 10, 23, 14), 0.7)
+    # Lucide battery-full and battery-charging, ISC: see NOTICE.
+    icon = Icon()
+    icon.rounded_rect((1.25, 5.25, 18.75, 18.75), 2.75, 1.5)
+    icon.line([(22, 10), (22, 14)], 1.5)
     icons['battery'] = icon
+    icon = Icon()
+    icon.line([(11, 7), (8, 12), (12, 12), (9, 17)], 1.5)
+    icon.line([(14.856, 6), (16, 6)], 1.5)
+    icon.curve((16, 6), (17.105, 6), (18, 6.895), (18, 8), 1.5)
+    icon.line([(18, 8), (18, 16)], 1.5)
+    icon.curve((18, 16), (18, 17.105), (17.105, 18), (16, 18), 1.5)
+    icon.line([(16, 18), (13.065, 18)], 1.5)
+    icon.line([(22, 10), (22, 14)], 1.5)
+    icon.line([(5.14, 18), (4, 18)], 1.5)
+    icon.curve((4, 18), (2.895, 18), (2, 17.105), (2, 16), 1.5)
+    icon.line([(2, 16), (2, 8)], 1.5)
+    icon.curve((2, 8), (2, 6.895), (2.895, 6), (4, 6), 1.5)
+    icon.line([(4, 6), (6.936, 6)], 1.5)
+    icons['battery_charging'] = icon
     for name, points in {'up': [(5.5, 15), (12, 8.5), (18.5, 15)],
                          'down': [(5.5, 9), (12, 15.5), (18.5, 9)]}.items():
         icon = Icon()

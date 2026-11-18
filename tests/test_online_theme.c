@@ -51,6 +51,8 @@ int main(void) {
     assert(online_theme_load()==ONLINE_THEME_WHALE_MAID);
     assert(online_theme_save(ONLINE_THEME_CLAUDE));
     assert(online_theme_load()==ONLINE_THEME_CLAUDE);
+    assert(online_theme_save(ONLINE_THEME_CHATGPT));
+    assert(online_theme_load()==ONLINE_THEME_CHATGPT);
     assert(online_theme_save(ONLINE_THEME_BACKGROUND_ONLY));
     assert(online_theme_load()==ONLINE_THEME_BACKGROUND_ONLY);
     assert(!online_theme_save(ONLINE_THEME_COUNT));

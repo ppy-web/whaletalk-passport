@@ -1,0 +1,9 @@
+{
+  "asset": "chatgpt-foreground.png",
+  "tool": "OpenAI built-in image generation",
+  "date": "2026-11-18",
+  "purpose": "Transparent silver-lilac dragon girl home foreground, leaving the center clear.",
+  "references": ["../characters/chatgpt-atlas.png", "claude-foreground.png composition"],
+  "prompt": "Create one transparent foreground overlay for a 240x320 portrait companion-device screen. Image 1 is a color and motif reference: the silver-haired ChatGPT dragon girl has pale lavender eyes, ivory clothing, silver knot ornaments, and graceful wings. Image 2 is a composition reference only: match its narrow top and bottom edge framing and broad empty center. Create a unique delicate silvery-white and soft lilac fantasy design: narrow translucent pearly ribbons sweeping across the top and bottom edges, small silver Celtic-knot ornaments and subtle crystalline wing-like details near the outer corners. Light, elegant and immersive, softly illustrated to suit the character. Keep the entire middle completely transparent so the character remains visible; keep top center and bottom center pale and simple so small status icons remain readable. True transparent background. Portrait 3:4 composition. Do not draw a person, face, animal, text, icons, buttons, watermark, opaque background or side border.",
+  "build": "tools/compile_home_foreground.py downsamples the source and encodes two edge regions using the shared RGB565/A8 palette and row format."
+}

@@ -11,9 +11,12 @@ static const lv_image_dsc_t *const *const portrait_frames[ONLINE_THEME_COUNT]={
     [ONLINE_THEME_WHALE]=whale_avatar_frames,
     [ONLINE_THEME_WHALE_MAID]=whale_maid_avatar_frames,
     [ONLINE_THEME_CLAUDE]=claude_avatar_frames,
+    [ONLINE_THEME_CHATGPT]=chatgpt_avatar_frames,
 };
 static const lv_image_dsc_t *frame_for(const void *source) {
-    if(source==&home_foreground_top || source==&home_foreground_bottom)return source;
+    if(source==&home_foreground_top || source==&home_foreground_bottom ||
+       source==&claude_foreground_top || source==&claude_foreground_bottom ||
+       source==&chatgpt_foreground_top || source==&chatgpt_foreground_bottom)return source;
     for(unsigned theme=0;theme<ONLINE_THEME_COUNT;theme++) {
         const lv_image_dsc_t *const *frames=portrait_frames[theme];
         if(frames)for(unsigned n=0;n<ONLINE_AVATAR_COUNT;n++)if(source==frames[n])return frames[n];
@@ -99,6 +102,7 @@ void whale_avatar_view_init(void) {
 }
 const lv_image_dsc_t *whale_avatar_view_source(online_theme_t theme,online_avatar_t frame) {
     if(!registered || (unsigned)theme>=ONLINE_THEME_COUNT || !portrait_frames[theme])return NULL;
-    if((unsigned)frame>=ONLINE_AVATAR_COUNT)frame=ONLINE_AVATAR_IDLE;
-    return portrait_frames[theme][frame];
+    const lv_image_dsc_t *const *frames=portrait_frames[theme];
+    if((unsigned)frame>=ONLINE_AVATAR_COUNT || !frames[frame])frame=ONLINE_AVATAR_IDLE;
+    return frames[frame];
 }

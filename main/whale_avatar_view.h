@@ -1,9 +1,8 @@
 #pragma once
 #include "whale_avatar.h"
 
-/* Display composition: a centered 280px portrait at y=38, below the 35px
- * status bar so the forelock stays visible; the fade continues behind keys.
- * Native scanline decoding avoids a scaled full-frame image allocation. */
+/* Portraits use a native viewport below the 35px status bar.
+ * Scanline decoding avoids a scaled full-frame image allocation. */
 #define WHALE_VIEW_WIDTH 240
 #define WHALE_VIEW_HEIGHT 285
 #define WHALE_VIEW_TOP 35

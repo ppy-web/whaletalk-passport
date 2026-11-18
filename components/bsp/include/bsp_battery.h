@@ -18,3 +18,8 @@ int bsp_battery_soc(void);
 
 // 电池电压 mV;读失败返回 -1。
 int bsp_battery_mv(void);
+
+// 1 when a USB data host is connected (used as an external-power indication),
+// -1 when unknown. A wall charger or power bank may not provide host packets;
+// CW2017 and the documented board pins do not expose the charger state.
+int bsp_battery_charging(void);
