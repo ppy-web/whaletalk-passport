@@ -21,9 +21,9 @@
 - `assets/characters/*_avatar.c` 是各图集生成的 Flash 数据。大肥鱼十帧，鲸鱼娘、Claude 和 ChatGPT 各六帧。源 PNG 留在素材目录。
 - `assets/backgrounds/*-source.png`：2026-11-05 内置 `imagegen` 生成的「晴海茶室」「星夜鲸梦」高清原图。
 - `assets/backgrounds/seaside-tea.png`、`moonlit-dream.png`：240×320、256 色 PNG 参考图。
-- `assets/backgrounds/whale_backgrounds.c`：晴海、星夜使用 240×320、256 色 BMP（共 155,756 字节）。
-  四季预置图从示例 PNG 转成 120×160、256 色 BMP（共 81,112 字节）。这六张 BMP 由手机预览与设备共用。
-  设备从每行的像素索引生成 RGB565，与自定义背景共用 480 字节行缓冲。
+- `assets/backgrounds/whale_backgrounds.c`：晴海、星夜为 240×320，四季预置图为 120×160。
+  六张图保存 256 色 BGR 调色板和 Deflate 压缩索引，共 139,234 字节。
+  设备从索引生成 RGB565。配网页按需分配独立的行带缓冲和解压工作区，流式还原原始 BMP。
 - [生成记录与提示词](../assets/backgrounds/generation.json)：两套背景及透明图集的生成工具、输入输出和完整提示词。
 - `assets/backgrounds/examples/`：8 张可下载上传的 240×320 示例背景，四季图也是预置图的原始素材。
   见[预览、下载与上传说明](background-examples.md)及[独立生成记录](../assets/backgrounds/examples/generation.json)。
@@ -36,6 +36,7 @@
 
 ```powershell
 python tools/compile_whale_avatar.py
+python tools/compile_home_foreground.py
 python tools/compile_backgrounds.py
 python tools/validate.py --preview
 python tools/render_preview.py
@@ -46,17 +47,17 @@ python tools/render_preview.py
 鲸鱼娘和 Claude 方形帧采样为 280×280，置于 (-20, 38)。
 ChatGPT 方形帧采样为 248×248，置于 (-4, 49)，从屏幕第 248 行渐隐到第 296 行。
 四套立绘在 35 像素状态栏下共用 240×285 的原生绘制区域。
-每帧使用 256 项 RGB565/A8 调色板。I8 索引按行进行无损游程编码，密集行保留原索引；
-行偏移表让 LVGL 可直接读取需要的行。四套立绘按切换顺序各用约 309、241、251、203 KiB Flash。
-四套立绘共用专用 LVGL 解码器，每行输出 RGB565/A8，只使用 720 字节
-像素缓存及对齐空间。不在设备上解压 PNG、缩放图片或分配完整图像缓冲，也不启用整屏离屏
-透明图层。大肥鱼思考时维持托腮姿势，由顶部三点动效提示等待。鲸鱼娘、Claude 和 ChatGPT 思考时按 3.2 秒循环表情。
+每帧使用 256 项 RGB565/A8 调色板。I8 索引每 16 行进行独立无损 Deflate 压缩，
+末带保留实际行数。带偏移表让 LVGL 直接定位要绘制的行。四套立绘按切换顺序各用约 215、154、167、138 KiB Flash。
+立绘、前景与内置背景在 LVGL 绘制时共用 3,840 字节的静态行带缓存。
+解压所需的工作区和输出 RGB565 或 RGB565/A8 的像素行缓冲共用同一段静态空间，按绘制顺序复用。
+大肥鱼思考时维持托腮姿势，由顶部三点动效提示等待。鲸鱼娘、Claude 和 ChatGPT 思考时按 3.2 秒循环表情。
 说话时有限频率切换嘴型。各帧底部的透明渐隐可直接叠在内置背景或用户自定义背景上。
 自定义图由网页压缩为 WTBG v1：8 字节头、16 项 RGB565LE 调色板（32 字节）、
 96×128 的 I4 像素（6,144 字节），高半字节在前，总长 6,184 字节。设备验证后存入 NVS
 的 `bg_custom`，背景选择为 `background`；均保留在 `dsh_voice` 内。读取失败不擦除配置。
 启动任务只保留 6,184 字节编码数据，不展开完整 RGB565 图。专用 LVGL 解码器直接
-输出 240×320 的逐行像素，每行最多使用 480 字节静态缓存，不缓存整张解码图，
+输出 240×320 的逐行像素，每行最多写入 480 字节，不缓存整张解码图，
 也不使用图片缩放路径。裁剪和放大索引在逐行解码中完成。内存不足时回退到内置图，不重置 NVS。
 未上传自定义图时不分配其像素缓冲。实际音频并行余量仍需设备验收。
 
@@ -68,6 +69,7 @@ LVGL 临时图像分配失败并停在断言循环的故障，表现为停留「
 
 Use case: identity-preserve. Create ONE production expression sprite ATLAS for a tiny 240x320 ESP32 voice companion screen, based on the reference character. Output a landscape image, ideally 1536x1024 pixels, with EXACTLY THREE COLUMNS and TWO ROWS of equal SQUARE cells, cells touching edge-to-edge, NO outer margins, NO grid lines. Each cell contains the SAME blue-haired chibi whale maid's front-facing BUST portrait down to her upper chest. Preserve reference identity: large sapphire blue eyes, rich blue flowing hair and curled forelock, white maid headband, navy-and-white maid outfit and bow, cyan whale-fin headphones. Simplify intricate clothing and highlights into clean polished anime cel shading and bold readable silhouettes for a 192x192 sprite. In EVERY cell keep identical camera, scale, framing, hair/headphone/torso position: full headband and curl inside the cell, generous 6% clear space around the silhouette, face prominent. Hands outside frame. Background in ALL cells is EXACTLY one flat opaque pale icy blue #E7F0FF, absolutely no gradients, shadows, textures or halos. Six expressions in exact reading order: top-left friendly idle, eyes open and small CLOSED-mouth smile; top-middle attentive listening, eyes open focused with slightly raised eyebrows and closed mouth; top-right thoughtful, eyes glance upward and small pursed closed mouth; bottom-left speaking, bright eyes and friendly OPEN mouth; bottom-middle blink, BOTH eyes gently CLOSED and closed-mouth smile; bottom-right mild concern/error, worried eyebrows and small closed-mouth frown, no tears. These are animation frames of one character, not six redesigned characters. NO text, labels, symbols, bubbles, UI controls, frames, watermarks or extra characters. Deliver only the single six-cell sprite atlas.
 
-首页透明前景 `assets/ui/home-foreground.png` 由内置图像生成工具参考鲸语封面与首页风格生成；`tools/compile_home_foreground.py` 将上下边缘转换为与角色共用的调色板及逐行压缩格式，由同一解码器逐行输出 RGB565+A8。预览为 LVGL 合成状态，并非设备截图。
+首页透明前景 `assets/ui/home-foreground.png` 由内置图像生成工具参考鲸语封面与首页风格生成。
+`tools/compile_home_foreground.py` 将上下边缘转换为与角色共用的调色板和分带压缩格式，由同一解码器逐行输出 RGB565+A8。预览为 LVGL 合成状态。
 
 ChatGPT 龙娘专属前景 [chatgpt-foreground.png](../assets/ui/chatgpt-foreground.png) 由内置 imagegen 参考角色图集与现有前景构图生成，提示词见[生成记录](../assets/ui/chatgpt-generation.json)。切换到 ChatGPT 时自动使用，沿用同一压缩和解码流程。

@@ -12,9 +12,11 @@ Copyright (c) 2026 FoloToy, MIT License (see LICENSE).
 Source Han Sans font subsets are licensed under SIL Open Font License 1.1.
 See assets/fonts/OFL-SourceHanSansSC.txt.
 
-The provisioning address font is a subset of Montserrat Medium, sourced from
-LVGL and licensed under SIL Open Font License 1.1.
-See assets/fonts/OFL-Montserrat.txt.
+The provisioning address font is a subset of Montserrat Medium. The SSID
+fallback preserves the non-ASCII glyphs and their kerning from LVGL's
+Montserrat 14, including glyphs from Font Awesome 5. Both fonts use the
+SIL Open Font License 1.1. See assets/fonts/OFL-Montserrat.txt and
+assets/fonts/FontAwesome5-LICENSE.txt.
 
 The battery and charging symbols are adapted from Lucide's battery-full and
 battery-charging icons, Copyright (c) Lucide Contributors, ISC License.

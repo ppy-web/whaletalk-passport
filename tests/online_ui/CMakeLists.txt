@@ -8,7 +8,7 @@ set(CONFIG_LV_USE_THORVG_INTERNAL OFF CACHE BOOL "" FORCE)
 add_subdirectory("${REPO_ROOT}/managed_components/lvgl__lvgl" lvgl)
 add_executable(preview preview.c "${REPO_ROOT}/main/online_state.c" "${REPO_ROOT}/main/online_onboarding.c" "${REPO_ROOT}/main/online_background_image.c"
     "${REPO_ROOT}/main/online_background_format.c"
-    "${REPO_ROOT}/main/whale_avatar_view.c"
+    "${REPO_ROOT}/main/whale_avatar_view.c" "${REPO_ROOT}/main/whale_band.c"
     "${REPO_ROOT}/assets/characters/whale_avatar.c"
     "${REPO_ROOT}/assets/characters/whale_maid_avatar.c"
     "${REPO_ROOT}/assets/characters/claude_avatar.c"
@@ -16,6 +16,7 @@ add_executable(preview preview.c "${REPO_ROOT}/main/online_state.c" "${REPO_ROOT
     "${REPO_ROOT}/assets/backgrounds/whale_backgrounds.c"
     "${REPO_ROOT}/assets/ui/home_foreground.c" "${REPO_ROOT}/assets/ui/claude_foreground.c" "${REPO_ROOT}/assets/ui/chatgpt_foreground.c"
     "${REPO_ROOT}/assets/fonts/mouthy_bean_zh_12.c" "${REPO_ROOT}/assets/fonts/mouthy_bean_zh_16.c"
+    "${REPO_ROOT}/assets/fonts/whaletalk_ssid_symbols.c"
     "${REPO_ROOT}/assets/fonts/whaletalk_address_20.c")
 target_include_directories(preview PRIVATE "stubs" "${REPO_ROOT}/main")
 target_compile_options(preview PRIVATE -Wall -Wextra -Werror)

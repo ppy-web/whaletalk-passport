@@ -198,7 +198,7 @@ static void setup_codes(const char *ssid) {
         }
         visibility(setup_qr[i],lv_qrcode_update(setup_qr[i],payloads[i],strlen(payloads[i]))==LV_RESULT_OK);
     }
-    snprintf(rendered,sizeof(rendered),"%s",ssid);
+    snprintf(rendered,sizeof(rendered),"%.*s",(int)sizeof(rendered)-1,ssid);
 }
 static void update_status_card(const online_status_t *status) {
     char summary[72];

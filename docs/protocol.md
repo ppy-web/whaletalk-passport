@@ -81,9 +81,14 @@ independent of the DSH audio protocol:
   `background` (0 = Seaside Tea, 1 = Moonlit Dream, 2 = custom, 3 = off,
   4 = Spring Sakura, 5 = Summer Shore, 6 = Autumn Maple, 7 = Winter Snow) and
   `customBackground` (a usable custom image is present).
+- `GET /`, `GET /appearance` and `GET /background-image.js` serve the
+  original page and script bytes with `Content-Encoding: gzip`. The build
+  compresses the files with a fixed timestamp and no embedded filename.
 - `GET /background-day.png`, `GET /background-night.png`, and
   `GET /background-season.bmp?id=4` through `id=7` serve the display's indexed
-  BMP assets with `Content-Type: image/bmp`.
+  presets with `Content-Type: image/bmp`. The portal reconstructs the original
+  BMP header, palette and bottom-up rows from the same Deflate bands the display
+  reads. The decoded response body is byte-identical to the original BMP.
 - `POST /background/upload` requires the current `X-Setup-Nonce` and exactly
   6,184 binary bytes. WTBG v1 starts with `57 54 42 47 01 60 80 10`, followed
   by sixteen RGB565LE palette entries and 6,144 I4 pixel bytes, high nibble

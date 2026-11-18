@@ -5,6 +5,7 @@
 #include "src/misc/lv_text_private.h"
 #include "src/draw/lv_image_decoder_private.h"
 #include "src/widgets/label/lv_label_private.h"
+#include "whale_band.h"
 #include "online_ui.c"
 static online_status_t fixture;
 static int battery_value=87;
@@ -155,28 +156,57 @@ static void check_foreground_decoding(void) {
         lv_image_decoder_close(&decoder);
     }
 }
+typedef struct {
+    uint8_t bytes[WHALE_BG_BMP_HEADER_BYTES+240*320];
+    size_t used;
+} bmp_capture_t;
+static bool capture_bmp(void *context,const uint8_t *data,size_t length) {
+    bmp_capture_t *capture=context;
+    assert(length<=sizeof(capture->bytes)-capture->used);
+    memcpy(capture->bytes+capture->used,data,length);
+    capture->used+=length;
+    return true;
+}
 static void check_preset_backgrounds(void) {
     const unsigned presets[]={ONLINE_BACKGROUND_DAY,ONLINE_BACKGROUND_NIGHT,ONLINE_BACKGROUND_SPRING,
         ONLINE_BACKGROUND_SUMMER,ONLINE_BACKGROUND_AUTUMN,ONLINE_BACKGROUND_WINTER};
-    const unsigned rows[]={0,81,319};
+    const unsigned rows[]={0,15,16,31,32,81,319};
+    static bmp_capture_t capture;
+    uint8_t scratch[WHALE_BAND_ROWS*WHALE_BAND_MAX_WIDTH];
+    whale_band_workspace_t workspace;
     for(unsigned i=0;i<sizeof(presets)/sizeof(*presets);i++) {
         const lv_image_dsc_t *image=whale_backgrounds[presets[i]];
         const unsigned scale=i<2?1:2,source_width=240/scale,source_height=320/scale;
+        capture.used=0;
+        assert(whale_background_write_bmp(image->data,image->data_size,image->header.w,image->header.h,
+            scratch,&workspace,capture_bmp,&capture));
+        assert(capture.used==WHALE_BG_BMP_HEADER_BYTES+source_width*source_height);
         for(unsigned j=0;j<sizeof(rows)/sizeof(*rows);j++) {
             lv_image_decoder_dsc_t decoder;
             assert(lv_image_decoder_open(&decoder,image,NULL)==LV_RESULT_OK);
             lv_area_t full={5,(int32_t)rows[j],227,(int32_t)rows[j]};
             lv_area_t area={LV_COORD_MIN,LV_COORD_MIN,LV_COORD_MIN,LV_COORD_MIN};
             assert(lv_image_decoder_get_area(&decoder,&full,&area)==LV_RESULT_OK);
-            const uint8_t *indices=image->data+WHALE_SEASON_PIXEL_OFFSET+
+            const uint8_t *indices=capture.bytes+WHALE_BG_BMP_HEADER_BYTES+
                 (source_height-1-rows[j]/scale)*source_width;
             const uint16_t *actual=(const uint16_t *)decoder.decoded->data;
             for(unsigned x=5;x<=227;x++) {
-                const uint8_t *p=image->data+WHALE_SEASON_PALETTE_OFFSET+4*indices[x/scale];
+                const uint8_t *p=capture.bytes+54+4*indices[x/scale];
                 uint16_t expected=(uint16_t)((p[2]>>3)<<11 | (p[1]>>2)<<5 | p[0]>>3);
                 assert(actual[x-5]==expected);
             }
             lv_image_decoder_close(&decoder);
+        }
+    }
+}
+static void check_ssid_symbols(void) {
+    const lv_font_t *fonts[]={&mouthy_bean_zh_12,&mouthy_bean_zh_16};
+    const uint32_t symbols[]={0xb0,0x2022,0xf001};
+    for(unsigned i=0;i<sizeof(fonts)/sizeof(*fonts);i++) {
+        for(unsigned n=0;n<sizeof(symbols)/sizeof(*symbols);n++) {
+            lv_font_glyph_dsc_t glyph;
+            assert(lv_font_get_glyph_dsc(fonts[i],&glyph,symbols[n],'?') && !glyph.is_placeholder);
+            assert(glyph.box_w && glyph.box_h && glyph.adv_w);
         }
     }
 }
@@ -222,7 +252,7 @@ int main(void) {
     lv_init();assert(lv_display_create(240,320));fixture.volume=75;fixture.audio_ok=true;fixture.overlay=true;fixture.cues=true;
     check_icon_flash_sources();
     online_ui_enter(true);
-    check_foreground_decoding();check_preset_backgrounds();
+    check_foreground_decoding();check_preset_backgrounds();check_ssid_symbols();
     assert(!whale_avatar_view_source((online_theme_t)1,ONLINE_AVATAR_IDLE));
     assert(!whale_avatar_view_source(ONLINE_THEME_COUNT,ONLINE_AVATAR_IDLE));
     const char *messages[]={"DSH-Voice-1234","正在连接后端","确定：开始对话","我在认真听","正在请教 Agent","DSH","后端消息过大或分片无效"};

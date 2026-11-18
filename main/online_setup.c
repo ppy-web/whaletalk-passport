@@ -3,6 +3,7 @@
 #include "online_profiles.h"
 #include "online_onboarding.h"
 #include "online_background.h"
+#include "whale_band.h"
 #include "whale_backgrounds.h"
 #include "esp_http_server.h"
 #include "esp_wifi.h"
@@ -62,30 +63,48 @@ static esp_err_t rescan(httpd_req_t *r) {
     scan_ok=online_setup_scan(nearby,&nearby_count)==ESP_OK;
     return networks(r);
 }
-extern const unsigned char setup_page_start[] asm("_binary_setup_page_html_start");
-extern const unsigned char setup_page_end[] asm("_binary_setup_page_html_end");
+extern const unsigned char setup_page_start[] asm("_binary_setup_page_html_gz_start");
+extern const unsigned char setup_page_end[] asm("_binary_setup_page_html_gz_end");
 static online_config_t previous;
 static bool has_previous;
 static bool uploaded_background;
 static char hotspot_ssid[33];
-extern const unsigned char appearance_start[] asm("_binary_appearance_page_html_start");
-extern const unsigned char appearance_end[] asm("_binary_appearance_page_html_end");
-extern const unsigned char background_js_start[] asm("_binary_background_image_js_start");
-extern const unsigned char background_js_end[] asm("_binary_background_image_js_end");
-static esp_err_t appearance(httpd_req_t *r) {
+extern const unsigned char appearance_start[] asm("_binary_appearance_page_html_gz_start");
+extern const unsigned char appearance_end[] asm("_binary_appearance_page_html_gz_end");
+extern const unsigned char background_js_start[] asm("_binary_background_image_js_gz_start");
+extern const unsigned char background_js_end[] asm("_binary_background_image_js_gz_end");
+static esp_err_t send_gzip(httpd_req_t *r,const unsigned char *data,size_t length) {
+    httpd_resp_set_hdr(r,"Content-Encoding","gzip");
+    return httpd_resp_send(r,(const char *)data,length);
+}
+static esp_err_t send_page(httpd_req_t *r,const unsigned char *data,size_t length) {
     httpd_resp_set_type(r,"text/html; charset=utf-8");
     httpd_resp_set_hdr(r,"Cache-Control","no-store");
     httpd_resp_set_hdr(r,"X-Frame-Options","DENY");
-    return httpd_resp_send(r,(const char *)appearance_start,appearance_end-appearance_start-1);
+    return send_gzip(r,data,length);
+}
+static esp_err_t appearance(httpd_req_t *r) {
+    return send_page(r,appearance_start,appearance_end-appearance_start);
 }
 static esp_err_t background_js(httpd_req_t *r) {
     httpd_resp_set_type(r,"text/javascript; charset=utf-8");
-    return httpd_resp_send(r,(const char *)background_js_start,background_js_end-background_js_start-1);
+    return send_gzip(r,background_js_start,background_js_end-background_js_start);
+}
+static bool write_bmp_chunk(void *context,const uint8_t *data,size_t length) {
+    return httpd_resp_send_chunk(context,(const char *)data,length)==ESP_OK;
 }
 static esp_err_t send_background_preview(httpd_req_t *r,online_background_t preset) {
     const lv_image_dsc_t *image=whale_backgrounds[preset];
+    struct {
+        whale_band_workspace_t workspace;
+        uint8_t rows[];
+    } *scratch=malloc(sizeof(*scratch)+WHALE_BAND_ROWS*image->header.w);
+    if(!scratch)return httpd_resp_send_err(r,HTTPD_500_INTERNAL_SERVER_ERROR,"内存不足，请重试");
     httpd_resp_set_type(r,"image/bmp");
-    return httpd_resp_send(r,(const char *)image->data,image->data_size);
+    bool sent=whale_background_write_bmp(image->data,image->data_size,image->header.w,image->header.h,
+        scratch->rows,&scratch->workspace,write_bmp_chunk,r);
+    free(scratch);
+    return sent?httpd_resp_send_chunk(r,NULL,0):ESP_FAIL;
 }
 static esp_err_t day_night_preview(httpd_req_t *r) {
     /* Keep the existing image URLs. Browsers use the response's BMP content type. */
@@ -140,10 +159,7 @@ static esp_err_t background_apply(httpd_req_t *r) {
     esp_timer_start_once(reboot_timer,1500000);return ESP_OK;
 }
 static esp_err_t home(httpd_req_t *r) {
-    httpd_resp_set_type(r,"text/html; charset=utf-8");
-    httpd_resp_set_hdr(r,"Cache-Control","no-store");
-    httpd_resp_set_hdr(r,"X-Frame-Options","DENY");
-    return httpd_resp_send(r,(const char *)setup_page_start,setup_page_end-setup_page_start-1);
+    return send_page(r,setup_page_start,setup_page_end-setup_page_start);
 }
 static esp_err_t current(httpd_req_t *r) {
     cJSON *j=cJSON_CreateObject();

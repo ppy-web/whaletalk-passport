@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Compile built-in expression atlases into flash-resident scanlines."""
+"""Compile built-in expression atlases into flash-resident 16-row Deflate bands."""
 from pathlib import Path
 import struct
+import zlib
 from PIL import Image, ImageChops
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -9,6 +10,7 @@ NAMES = ('idle', 'listening', 'thinking', 'speaking', 'blink', 'error')
 FISH_NAMES = (*NAMES, 'eating', 'speaking_closed', 'speaking_blink', 'speaking_closed_blink')
 VIEW_WIDTH, VIEW_HEIGHT = 240, 285
 VIEW_TOP = 35
+BAND_ROWS = 16
 # Atlas file, rendered portrait size, top edge and optional fade start on the display.
 ATLASES = {
     'whale': ('big-fat-fish-atlas.png', (216, 288), 38, 295),
@@ -18,47 +20,43 @@ ATLASES = {
 }
 
 
-def pack_row(row):
-    """Pack repeated indices or runs of literals; store dense rows verbatim."""
-    def run_end(start):
-        end = start + 1
-        while end < len(row) and end - start < 128 and row[end] == row[start]:
-            end += 1
-        return end
-
-    packed = bytearray()
-    i = 0
-    while i < len(row):
-        end = run_end(i)
-        count = end - i
-        if count >= 3:
-            packed.extend((0x80 | (count - 1), row[i]))
-        else:
-            start = i
-            while end < len(row) and end - start < 128 and run_end(end) - end < 3:
-                end += 1
-            packed.append(end - start - 1)
-            packed.extend(row[start:end])
-        i = end
-    return packed if len(packed) < len(row) else row
+def compress_band(band_bytes):
+    """Compress one raw indexed band with a 4 KiB Deflate window and verify round-trip."""
+    compressor = zlib.compressobj(level=9, method=zlib.DEFLATED, wbits=-12)
+    chunk = compressor.compress(band_bytes) + compressor.flush()
+    if zlib.decompress(chunk, -15) != band_bytes:
+        raise ValueError('Band deflate round-trip verification failed')
+    return chunk
 
 
-def pack_frame(indexed):
-    raw = bytearray()
+def pack_indexed_bands(indices, width, height, band_rows=BAND_ROWS):
+    """Pack top-down indexed pixel rows into independently seekable 16-row Deflate bands."""
+    pixels = bytearray()
+    offsets = [0]
+    for y in range(0, height, band_rows):
+        rows = min(band_rows, height - y)
+        band = indices[y * width:(y + rows) * width]
+        pixels.extend(compress_band(band))
+        offsets.append(len(pixels))
+    if len(pixels) > 65535:
+        raise ValueError('Band data exceeds the uint16 offset limit; use a less dense atlas')
+    return struct.pack(f'<{len(offsets)}H', *offsets) + bytes(pixels)
+
+
+def pack_palette_and_bands(indexed):
+    """Emit a 768-byte RGB565LE+A8 palette followed by 16-row Deflate bands."""
     palette = indexed.getpalette('RGBA')
+    raw = bytearray()
+    canonical_map = {}
+    remap = [0] * 256
     for index in range(256):
         r, g, b, a = palette[index * 4:index * 4 + 4]
         value = (r >> 3) << 11 | (g >> 2) << 5 | b >> 3
-        raw.extend((value & 255, value >> 8, a))
-    indices = indexed.tobytes()
-    pixels = bytearray()
-    offsets = [0]
-    for offset in range(0, len(indices), VIEW_WIDTH):
-        pixels.extend(pack_row(indices[offset:offset + VIEW_WIDTH]))
-        offsets.append(len(pixels))
-    if len(pixels) > 65535:
-        raise ValueError('Row data exceeds the uint16 offset limit; use a less dense atlas')
-    return raw + struct.pack(f'<{len(offsets)}H', *offsets) + pixels
+        entry = bytes((value & 255, value >> 8, a))
+        raw.extend(entry)
+        remap[index] = canonical_map.setdefault(entry, index)
+    remapped = bytes(remap[b] for b in indexed.tobytes())
+    return bytes(raw) + pack_indexed_bands(remapped, indexed.width, indexed.height)
 
 
 def bottom_fade(fade_start, portrait_bottom):
@@ -96,7 +94,7 @@ def compile_atlas(directory, character, source, portrait_size, portrait_top, fad
             indexed = frame.quantize(colors=256, method=Image.Quantize.FASTOCTREE)
             if character == 'whale':
                 indexed.convert('RGBA').save(directory / f'whale-{name}.png')
-            raw = pack_frame(indexed)
+            raw = pack_palette_and_bands(indexed)
             total_size += len(raw)
             output.append(f'static const uint8_t LV_ATTRIBUTE_MEM_ALIGN pixels_{name}[] = {{')
             for offset in range(0, len(raw), 32):
@@ -108,7 +106,7 @@ def compile_atlas(directory, character, source, portrait_size, portrait_top, fad
         output.extend([f'const lv_image_dsc_t *const {character}_avatar_frames[ONLINE_AVATAR_COUNT] = {{',
                        '  ' + ', '.join(f'&image_{name}' for name in names), '};', ''])
         (directory / f'{character}_avatar.c').write_text('\n'.join(output), encoding='utf-8')
-    print(f'Compiled {len(names)} frames: {VIEW_WIDTH}x{VIEW_HEIGHT}, RGB565+A8 palette/index, '
+    print(f'Compiled {len(names)} frames: {VIEW_WIDTH}x{VIEW_HEIGHT}, RGB565+A8 palette + 16-row Deflate, '
           f'{total_size:,} flash bytes for {character}; native scanline drawing')
 
 

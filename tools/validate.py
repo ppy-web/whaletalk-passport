@@ -70,6 +70,10 @@ def host_tests():
     run(*command, '-std=c11', '-Wall', '-Wextra', '-Werror', '-Imain',
         'tests/test_online_onboarding.c', 'main/online_onboarding.c', '-o', onboarding_test)
     run(onboarding_test)
+    band_test = build / ('band-test.exe' if os.name == 'nt' else 'band-test')
+    run(*command, '-std=c11', '-Wall', '-Wextra', '-Werror', '-Imain',
+        'tests/test_whale_band.c', 'main/whale_band.c', '-o', band_test)
+    run(band_test)
     print('Host tests: PASS', flush=True)
 
 

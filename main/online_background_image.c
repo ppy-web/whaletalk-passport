@@ -1,6 +1,7 @@
 #include "online_background_image.h"
 #include "online_background.h"
 #include "whale_backgrounds.h"
+#include "whale_image_scratch.h"
 #include "src/draw/lv_image_decoder_private.h"
 
 static lv_image_dsc_t source={
@@ -9,7 +10,7 @@ static lv_image_dsc_t source={
 };
 /* C3 uses one LVGL software draw unit. get_area and its immediate draw are
  * synchronous; no row pointers escape into a deferred image task/cache. */
-LV_DRAW_BUF_DEFINE_STATIC(scanline,240,1,LV_COLOR_FORMAT_RGB565);
+static lv_draw_buf_t scanline;
 static bool registered;
 static bool supported(const void *src) {
     if(src==&source)return online_background_valid(source.data,source.data_size);
@@ -18,8 +19,7 @@ static bool supported(const void *src) {
     for(unsigned i=0;i<sizeof(presets)/sizeof(*presets);i++) {
         unsigned n=presets[i];
         const lv_image_dsc_t *preset=whale_backgrounds[n];
-        unsigned size=n<=ONLINE_BACKGROUND_NIGHT?1078+240*320:WHALE_SEASON_BYTES;
-        if(src==preset)return preset && preset->data_size==size;
+        if(src==preset)return preset && preset->data_size>WHALE_BG_PALETTE_BYTES;
     }
     return false;
 }
@@ -34,19 +34,17 @@ static lv_result_t open_image(lv_image_decoder_t *decoder,lv_image_decoder_dsc_t
     if(!supported(dsc->src))return LV_RESULT_INVALID;
     dsc->args.no_cache=true;dsc->decoded=NULL;return LV_RESULT_OK;
 }
-static void preset_row(const uint8_t *bmp,bool full_size,unsigned x,unsigned y,unsigned width,uint16_t *out) {
-    /* BMP stores indexed rows bottom-up and the palette in B,G,R,0 order.
-     * Seasonal sources are half the panel size; day and night are native size. */
-    unsigned source_width=full_size?240:WHALE_SEASON_WIDTH;
-    unsigned source_height=full_size?320:WHALE_SEASON_HEIGHT;
-    unsigned scale=full_size?1:2;
-    const uint8_t *palette=bmp+WHALE_SEASON_PALETTE_OFFSET;
-    const uint8_t *indices=bmp+WHALE_SEASON_PIXEL_OFFSET+
-        (source_height-1-y/scale)*source_width;
+static bool preset_row(const lv_image_dsc_t *image,unsigned x,unsigned y,unsigned width,uint16_t *out) {
+    unsigned scale=240/image->header.w;
+    const uint8_t *palette=image->data;
+    const uint8_t *indices=whale_band_cached_row(palette+WHALE_BG_PALETTE_BYTES,
+        image->data_size-WHALE_BG_PALETTE_BYTES,image->header.w,image->header.h,y/scale,&whale_image_scratch.inflate);
+    if(!indices)return false;
     for(unsigned n=0;n<width;n++) {
-        const uint8_t *entry=palette+4*indices[(x+n)/scale];
+        const uint8_t *entry=palette+3*indices[(x+n)/scale];
         out[n]=(uint16_t)((entry[2]>>3)<<11 | (entry[1]>>2)<<5 | entry[0]>>3);
     }
+    return true;
 }
 static lv_result_t get_area(lv_image_decoder_t *decoder,lv_image_decoder_dsc_t *dsc,
                           const lv_area_t *full,lv_area_t *area) {
@@ -63,9 +61,8 @@ static lv_result_t get_area(lv_image_decoder_t *decoder,lv_image_decoder_dsc_t *
     if(image==&source) {
         if(!online_background_decode_row(image->data,image->data_size,x,y,(unsigned)width,(uint16_t *)row->data))
             return LV_RESULT_INVALID;
-    } else {
-        preset_row(image->data,image==whale_backgrounds[ONLINE_BACKGROUND_DAY] ||
-            image==whale_backgrounds[ONLINE_BACKGROUND_NIGHT],x,y,(unsigned)width,(uint16_t *)row->data);
+    } else if(!preset_row(image,x,y,(unsigned)width,(uint16_t *)row->data)) {
+        return LV_RESULT_INVALID;
     }
     dsc->decoded=row;return LV_RESULT_OK;
 }
@@ -74,7 +71,8 @@ static void close_image(lv_image_decoder_t *decoder,lv_image_decoder_dsc_t *dsc)
 }
 void online_background_image_init(void) {
     if(registered)return;
-    LV_DRAW_BUF_INIT_STATIC(scanline);
+    lv_draw_buf_init(&scanline,240,1,LV_COLOR_FORMAT_RGB565,0,
+        whale_image_scratch.pixels,LV_DRAW_BUF_SIZE(240,1,LV_COLOR_FORMAT_RGB565));
     lv_image_decoder_t *decoder=lv_image_decoder_create();
     if(!decoder)return;
     lv_image_decoder_set_info_cb(decoder,info);lv_image_decoder_set_open_cb(decoder,open_image);

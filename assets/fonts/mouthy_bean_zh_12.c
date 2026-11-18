@@ -1,7 +1,7 @@
 /*******************************************************************************
  * Size: 12 px
  * Bpp: 2
- * Opts: --size 12 --bpp 2 --format lvgl --font <font-source> --symbols ·、。一上下不与中义了亮仅他任传位作你使保信先克入关其具兼内冬准出分切列初删别刷前务动助化协即历原发取口可史合同后听启和器回在塞墙声备复夏多夜大太失好始娘存定客室容密对将小屋屏工已帮常并序度庭开异式当录待态思恢息成我或户所手打执扫扬拥择持按换接描提握播操支收放效教断新无日时星春景晴暂暖有服未本机枫查校核格梦检樱正步求没沿法浅海消清湖滩火点热片版状用电界留真短码确示秋稍端等答管系络统继续网置群考耗肥背脑自致节茶行表被解认议记讲设识试话语误说请读调败账超足较过近返进连退送选逐通配重量钟钥错键长闭间防附除雪需静面音页项顺预频额风首鱼鲸麦，： --range 0x20-0x7e --no-compress --no-kerning --lv-fallback lv_font_montserrat_14 --lv-include lvgl.h --lv-font-name mouthy_bean_zh_12 -o <repo>\assets\fonts\mouthy_bean_zh_12.c
+ * Opts: --size 12 --bpp 2 --format lvgl --font <font-source> --symbols ·、。一上下不与中义了亮仅他任传位作你使保信先克入关其具兼内冬准出分切列初删别刷前务动助化协即历原发取口可史合同后听启和器回在塞墙声备复夏多夜大太失好始娘存定客室容密对将小屋屏工已帮常并序度庭开异式当录待态思恢息成我或户所手打执扫扬拥择持按换接描提握播操支收放效教断新无日时星春景晴暂暖有服未本机枫查校核格梦检樱正步求没沿法浅海消清湖滩火点热片版状用电界留真短码确示秋稍端等答管系络统继续网置群考耗肥背脑自致节茶行表被解认议记讲设识试话语误说请读调败账超足较过近返进连退送选逐通配重量钟钥错键长闭间防附除雪需静面音页项顺预频额风首鱼鲸麦，： --range 0x20-0x7e --no-compress --no-kerning --lv-fallback whaletalk_ssid_symbols --lv-include lvgl.h --lv-font-name mouthy_bean_zh_12 -o <repo>\assets\fonts\mouthy_bean_zh_12.c
  ******************************************************************************/
 
 #ifdef LV_LVGL_H_INCLUDE_SIMPLE
@@ -9,6 +9,8 @@
 #else
 #include "lvgl.h"
 #endif
+
+LV_FONT_DECLARE(whaletalk_ssid_symbols);
 
 #ifndef MOUTHY_BEAN_ZH_12
 #define MOUTHY_BEAN_ZH_12 1
@@ -2693,7 +2695,7 @@ static lv_font_fmt_txt_dsc_t font_dsc = {
 #endif
 };
 
-extern const lv_font_t lv_font_montserrat_14;
+extern const lv_font_t whaletalk_ssid_symbols;
 
 
 /*-----------------
@@ -2719,7 +2721,7 @@ lv_font_t mouthy_bean_zh_12 = {
 #endif
     .dsc = &font_dsc,          /*The custom font data. Will be accessed by `get_glyph_bitmap/dsc` */
 #if LV_VERSION_CHECK(8, 2, 0) || LVGL_VERSION_MAJOR >= 9
-    .fallback = &lv_font_montserrat_14,
+    .fallback = &whaletalk_ssid_symbols,
 #endif
     .user_data = NULL,
 };
