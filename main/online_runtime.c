@@ -54,7 +54,9 @@ static atomic_bool mic,ready,connected,got_ip,hello_pending,cancel_pending,setup
 static atomic_uint epoch,level,volume=ONLINE_VOLUME_DEFAULT,capture_drops;
 static atomic_uint volume_revision;
 static atomic_bool volume_save_failed;
-static atomic_uint profile_pending;
+typedef struct {char ssid[33];bool remove;} profile_request_t;
+/* Held under state_lock until the maintenance worker finishes the request. */
+static profile_request_t profile_request;
 static atomic_bool profile_save_failed;
 static atomic_uint selected_theme=ONLINE_THEME_WHALE,theme_revision;
 static atomic_bool theme_save_failed;
@@ -218,14 +220,21 @@ void online_volume(void) {
     cue_request(CUE_VOLUME);
 }
 void online_setup(void) { atomic_store(&setup_pending,true); }
-void online_select_profile(unsigned index) {
-    if(index>=ONLINE_PROFILE_LIMIT)return;
+static void request_profile(const char *ssid,bool remove) {
+    if(!ssid || !*ssid)return;
     if(!atomic_load(&theme_storage_available)) {atomic_store(&profile_save_failed,true);return;}
-    atomic_store(&profile_save_failed,false);
-    unsigned expected=0;
-    atomic_compare_exchange_strong(&profile_pending,&expected,index+1);
+    profile_request_t request={.remove=remove};
+    snprintf(request.ssid,sizeof(request.ssid),"%s",ssid);
+    portENTER_CRITICAL(&state_lock);
+    if(!profile_request.ssid[0]) {
+        profile_request=request;
+        atomic_store(&profile_save_failed,false);
+    }
+    portEXIT_CRITICAL(&state_lock);
     TaskHandle_t task=atomic_load(&maintenance_worker);if(task)xTaskNotifyGive(task);
 }
+void online_select_profile(const char *ssid) {request_profile(ssid,false);}
+void online_delete_profile(const char *ssid) {request_profile(ssid,true);}
 void online_cycle_theme(void) {
     unsigned current=atomic_load(&selected_theme);
     while(!atomic_compare_exchange_weak(&selected_theme,&current,online_theme_next(online_theme_normalize(current)))) {}
@@ -284,6 +293,31 @@ static void display_standby_step(bool *suspended) {
     if(e!=ESP_OK)ESP_LOGW("whale_power","display transition failed: %s",esp_err_to_name(e));
     else if(asleep==*suspended)ESP_LOGI("whale_power","panel and LVGL %s",asleep?"suspended":"resumed");
 }
+static void process_profile_request(void) {
+    portENTER_CRITICAL(&state_lock);
+    profile_request_t request=profile_request;
+    portEXIT_CRITICAL(&state_lock);
+    if(!request.ssid[0])return;
+
+    bool was_current=false;
+    bool ok=request.remove?online_profile_delete(request.ssid,&was_current):online_profile_select(request.ssid);
+    if(ok && (!request.remove || was_current))esp_restart();
+
+    portENTER_CRITICAL(&state_lock);
+    if(ok) {
+        for(unsigned i=0;i<status.profile_count;i++) {
+            if(strcmp(status.profile_ssids[i],request.ssid))continue;
+            unsigned last=--status.profile_count;
+            if(i<last)memmove(status.profile_ssids[i],status.profile_ssids[i+1],
+                              (last-i)*sizeof(status.profile_ssids[0]));
+            memset(status.profile_ssids[last],0,sizeof(status.profile_ssids[0]));
+            break;
+        }
+    }
+    atomic_store(&profile_save_failed,!ok);
+    profile_request.ssid[0]='\0';
+    portEXIT_CRITICAL(&state_lock);
+}
 static void theme_task(void *arg) {
     (void)arg;unsigned saved_revision=0,saved_idle_revision=0,saved_background_revision=0,saved_brightness_revision=0,saved_overlay_revision=0,saved_cues_revision=0;
     unsigned saved_volume_revision=0;
@@ -291,15 +325,8 @@ static void theme_task(void *arg) {
     bool display_suspended=false;
     for(;;) {
         display_standby_step(&display_suspended);
+        process_profile_request();
         online_status_t snapshot;online_snapshot(&snapshot);
-        unsigned profile=atomic_exchange(&profile_pending,0);
-        if(profile) {
-            /* This worker also survives provisioning mode. No Wi-Fi/HTTP/LVGL
-             * call runs in the button callback. Select by the displayed SSID
-             * in case a portal save has reordered the stored profiles. */
-            if(profile<=snapshot.profile_count && online_profile_select(snapshot.profile_ssids[profile-1]))esp_restart();
-            atomic_store(&profile_save_failed,true);
-        }
         unsigned revision=atomic_load(&theme_revision),idle_changed=atomic_load(&idle_revision),
             background_changed=atomic_load(&background_revision),brightness_changed=atomic_load(&brightness_revision);
         if(revision!=saved_revision && snapshot.phase!=ONLINE_SPEAKING && snapshot.phase!=ONLINE_THINKING) {

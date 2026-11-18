@@ -313,6 +313,8 @@ online_action_t online_menu_key(online_menu_t *m,online_key_t key) {
             m->selected=(m->selected+offset)%ONLINE_MENU_COUNT;
             return ONLINE_ACTION_NONE;
         }
+        if(key==ONLINE_KEY_DOWN_LONG && m->page==ONLINE_CONNECTION && m->selected<m->network_count)
+            return ONLINE_ACTION_NETWORK_DELETE;
         return key==ONLINE_KEY_UP_LONG?ONLINE_ACTION_OVERLAY:ONLINE_ACTION_NONE;
     }
     if(key==ONLINE_KEY_LONG) {

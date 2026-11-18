@@ -32,9 +32,9 @@ static const theme_style_t theme_styles[ONLINE_THEME_COUNT]={
     [ONLINE_THEME_CHATGPT]={"界面：ChatGPT",0xEEE9FA,0xFAF8FF,0xDCD3ED,0xE9DFF7,0x625084},
     [ONLINE_THEME_BACKGROUND_ONLY]={"界面：仅背景",0xE7F0FF,0xF5FAFF,0xCCDDF0,0xD9EDFF,0x2F6FA7},
 };
-enum { SETTINGS_ROWS = ONLINE_MENU_COUNT };
+enum { SETTINGS_ROWS = ONLINE_PROFILE_LIMIT + 2 };
 _Static_assert(SETTINGS_ROWS>=(int)ONLINE_DISPLAY_COUNT && SETTINGS_ROWS>=(int)ONLINE_SOUND_COUNT &&
-               SETTINGS_ROWS>=ONLINE_PROFILE_LIMIT+2,"Settings list cannot fit its longest page");
+               SETTINGS_ROWS>=(int)ONLINE_MENU_COUNT,"Settings list cannot fit its longest page");
 static const struct {
     const char *label;
     const lv_image_dsc_t *icon;
@@ -215,6 +215,9 @@ static void refresh(lv_timer_t *timer) {
     bool activity=atomic_exchange(&pending_activity,false);
     unsigned key=atomic_exchange(&pending_key,0);
     online_status_t s;online_snapshot(&s);
+    /* A deletion can shift the rows before this frame redraws the list. */
+    if(menu.page==ONLINE_CONNECTION && menu.network_count!=s.profile_count &&
+       (key==ONLINE_KEY_OK || key==ONLINE_KEY_DOWN_LONG))key=0;
     menu.network_count=s.profile_count;
     menu.provisioning=s.phase==ONLINE_SETUP;
     /* A command queued before the idle deadline still counts as activity. */
@@ -233,13 +236,16 @@ static void refresh(lv_timer_t *timer) {
             case ONLINE_ACTION_BRIGHTNESS: online_cycle_brightness();break;
             case ONLINE_ACTION_OVERLAY: online_toggle_overlay();break;
             case ONLINE_ACTION_CUE: online_toggle_cues();break;
-            case ONLINE_ACTION_NETWORK: online_select_profile(menu.selected);break;
-            case ONLINE_ACTION_RESUME: online_select_profile(0);break;
+            case ONLINE_ACTION_NETWORK: online_select_profile(s.profile_ssids[menu.selected]);break;
+            case ONLINE_ACTION_RESUME: online_select_profile(s.profile_ssids[0]);break;
+            case ONLINE_ACTION_NETWORK_DELETE: online_delete_profile(s.profile_ssids[menu.selected]);break;
             default: break;
         }
     }
     if(menu.page!=ONLINE_HOME)online_ptt_abort();
     online_snapshot(&s);
+    menu.network_count=s.profile_count;
+    if(menu.page==ONLINE_CONNECTION && menu.selected>menu.network_count+1)menu.selected=menu.network_count+1;
     bool was_asleep=atomic_load(&screen_asleep);
     bool asleep=online_screen_step(&screen_idle,now,activity,
         !buttons_available || s.keep_awake || s.ptt_recording || s.phase==ONLINE_SETUP || s.phase==ONLINE_THINKING || s.phase==ONLINE_SPEAKING,
@@ -381,12 +387,11 @@ static void refresh(lv_timer_t *timer) {
             help=display_problem;
             if(menu.selected==ONLINE_DISPLAY_BACK)controls="确定返回";
         } else if(connection) {
-            help=s.profile_save_failed?"切换失败，请重试":
+            help=s.profile_save_failed?"操作失败，请重试":
                 s.profile_count?"配网历史":"配网历史：暂无记录";
             if(menu.selected==s.profile_count)controls="确定进入配网";
             else if(menu.selected>s.profile_count)controls="确定返回";
-            else if(!menu.selected)controls=setup?"确定恢复连接":"上/下选择";
-            else controls="确定切换并重启";
+            else controls="短按OK选择 · 长按DOWN删除";
         } else if(sound) {
             help=sound_problem;
             if(menu.selected==ONLINE_SOUND_VOLUME)controls="确定调节音量";

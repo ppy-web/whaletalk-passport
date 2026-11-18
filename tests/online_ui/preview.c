@@ -12,7 +12,8 @@ static int charging_value=-1;
 static unsigned toggles,cancels,volumes,setups,themes;
 static unsigned ptt_presses,ptt_starts,ptt_releases;
 static unsigned idle_changes,brightness_changes;
-static unsigned network_switches,selected_network;
+static unsigned network_switches,network_deletions;
+static char selected_network[33],deleted_network[33];
 static bool standby;
 static unsigned standby_entries,wake_requests;
 bool online_set_standby(bool asleep) {
@@ -35,7 +36,8 @@ void online_toggle_mic(void){toggles++;}
 void online_cancel(void){cancels++;}
 void online_volume(void){fixture.volume=online_volume_next(fixture.volume);volumes++;}
 void online_setup(void){setups++;}
-void online_select_profile(unsigned index){network_switches++;selected_network=index;}
+void online_select_profile(const char *ssid){network_switches++;snprintf(selected_network,sizeof(selected_network),"%s",ssid);}
+void online_delete_profile(const char *ssid){network_deletions++;snprintf(deleted_network,sizeof(deleted_network),"%s",ssid);}
 void online_cycle_theme(void){fixture.theme=online_theme_next(fixture.theme);themes++;}
 void online_cycle_idle(void){fixture.idle=online_idle_next(fixture.idle);idle_changes++;}
 void online_cycle_brightness(void){fixture.brightness=online_brightness_next(fixture.brightness);brightness_changes++;}
@@ -720,16 +722,26 @@ int main(void) {
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(menu.page==ONLINE_CONNECTION);
     online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);refresh(NULL);
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(menu.page==ONLINE_SETTINGS);
-    fixture.profile_count=3;strcpy(fixture.profile_ssids[0],"Home");strcpy(fixture.profile_ssids[1],"Office");
-    strcpy(fixture.profile_ssids[2],"12345678901234567890123456789012");
+    fixture.profile_count=6;
+    strcpy(fixture.profile_ssids[0],"Home");strcpy(fixture.profile_ssids[1],"Office");
+    strcpy(fixture.profile_ssids[2],"Phone");strcpy(fixture.profile_ssids[3],"Guest");
+    strcpy(fixture.profile_ssids[4],"Travel");strcpy(fixture.profile_ssids[5],"12345678901234567890123456789012");
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);snap("networks");
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(!network_switches);
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
-    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(network_switches==1 && selected_network==1);
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(network_switches==1 && !strcmp(selected_network,"Office"));
     fixture.profile_save_failed=true;refresh(NULL);snap("networks-save-failed");fixture.profile_save_failed=false;
-    online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);snap("networks-long-ssid");
-    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(network_switches==2 && selected_network==2);
+    for(unsigned i=0;i<4;i++) {online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);}
+    snap("networks-long-ssid");
+    online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);
+    assert(network_switches==2 && !strcmp(selected_network,fixture.profile_ssids[5]));
+    online_ui_key(BSP_BTN_DOWN,BSP_BTN_PRESS);
+    online_ui_key(BSP_BTN_DOWN,BSP_BTN_LONG);refresh(NULL);
+    assert(network_deletions==1 && !strcmp(deleted_network,fixture.profile_ssids[5]) && menu.selected==5);
+    fixture.profile_count--;
+    online_ui_key(BSP_BTN_DOWN,BSP_BTN_RELEASE);
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
+    assert(menu.selected==fixture.profile_count && network_deletions==1);
     snap("networks-reconfigure");
     online_ui_key(BSP_BTN_DOWN,BSP_BTN_CLICK);refresh(NULL);
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(menu.page==ONLINE_SETTINGS);
@@ -742,18 +754,18 @@ int main(void) {
     strcpy(fixture.message,"DSH-Voice-ABCDEF");
     refresh(NULL);snap("setup-resume");
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);
-    assert(network_switches==3 && selected_network==0 && toggles==before_resume_mic);
+    assert(network_switches==3 && !strcmp(selected_network,"Home") && toggles==before_resume_mic);
     online_ui_key(BSP_BTN_OK,BSP_BTN_LONG);refresh(NULL);
     online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);refresh(NULL);
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);
     snap("networks-resume");
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);
-    assert(network_switches==4 && selected_network==0);
+    assert(network_switches==4 && !strcmp(selected_network,"Home"));
     online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);refresh(NULL);
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);assert(menu.page==ONLINE_SETTINGS);
     online_ui_key(BSP_BTN_UP,BSP_BTN_CLICK);refresh(NULL);assert(menu.selected==ONLINE_MENU_HOME);
     online_ui_key(BSP_BTN_OK,BSP_BTN_CLICK);refresh(NULL);
-    assert(menu.page==ONLINE_HOME && network_switches==5 && selected_network==0);
+    assert(menu.page==ONLINE_HOME && network_switches==5 && !strcmp(selected_network,"Home"));
     fixture.phase=ONLINE_READY;buttons_available=false;refresh(NULL);check();
     assert(backlight==100 && strstr(lv_label_get_text(title),"按键不可用"));
     puts("Online UI: theme switching, portrait rendering, phases, glyphs, clipping and controls PASS");

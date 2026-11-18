@@ -247,19 +247,22 @@ int main(void) {
     assert(online_menu_key(&menu,ONLINE_KEY_OK)==ONLINE_ACTION_SETUP && menu.page==ONLINE_HOME);
     online_menu_key(&menu,ONLINE_KEY_LONG);
     online_menu_key(&menu,ONLINE_KEY_UP);
-    menu.network_count=3;
+    menu.network_count=6;
     online_menu_key(&menu,ONLINE_KEY_OK);
     assert(menu.page==ONLINE_CONNECTION);
     assert(online_menu_key(&menu,ONLINE_KEY_OK)==ONLINE_ACTION_NONE); /* Already selected. */
-    online_menu_key(&menu,ONLINE_KEY_UP);assert(menu.selected==4);
+    assert(online_menu_key(&menu,ONLINE_KEY_DOWN_LONG)==ONLINE_ACTION_NETWORK_DELETE && menu.selected==0);
+    online_menu_key(&menu,ONLINE_KEY_UP);assert(menu.selected==7);
+    assert(online_menu_key(&menu,ONLINE_KEY_DOWN_LONG)==ONLINE_ACTION_NONE && menu.selected==7);
     online_menu_key(&menu,ONLINE_KEY_OK);
     assert(menu.page==ONLINE_SETTINGS && menu.selected==ONLINE_MENU_CONNECTION);
     online_menu_key(&menu,ONLINE_KEY_OK);
     online_menu_key(&menu,ONLINE_KEY_DOWN);
     assert(online_menu_key(&menu,ONLINE_KEY_OK)==ONLINE_ACTION_NETWORK && menu.selected==1);
+    for(unsigned i=0;i<4;i++)online_menu_key(&menu,ONLINE_KEY_DOWN);
+    assert(online_menu_key(&menu,ONLINE_KEY_DOWN_LONG)==ONLINE_ACTION_NETWORK_DELETE && menu.selected==5);
     online_menu_key(&menu,ONLINE_KEY_DOWN);
-    online_menu_key(&menu,ONLINE_KEY_DOWN);
-    assert(menu.selected==3);
+    assert(online_menu_key(&menu,ONLINE_KEY_DOWN_LONG)==ONLINE_ACTION_NONE && menu.selected==6);
     assert(online_menu_key(&menu,ONLINE_KEY_OK)==ONLINE_ACTION_SETUP);
     assert(menu.page==ONLINE_HOME);
     menu.provisioning=true;

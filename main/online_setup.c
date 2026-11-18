@@ -194,7 +194,7 @@ static esp_err_t save(httpd_req_t *r) {
         field(j,"token",c.token,sizeof(c.token)) && online_config_valid(&c);
     cJSON_Delete(j);memset(body,0,sizeof(body));
     if(!valid) {memset(&c,0,sizeof(c));return httpd_resp_send_err(r,HTTPD_400_BAD_REQUEST,"检查 Wi-Fi、电脑 IP 和 4 位配对码");}
-    bool stored=online_profile_save(&c);
+    bool stored=online_profile_save(&c,keep);
     memset(&c,0,sizeof(c));
     if(!stored) return httpd_resp_send_err(r,HTTPD_500_INTERNAL_SERVER_ERROR,"保存失败，原配置保留，请重试");
     saved=true;httpd_resp_set_type(r,"text/plain; charset=utf-8");

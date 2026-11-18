@@ -67,16 +67,17 @@ and [Microsoft's sound design guidance](https://learn.microsoft.com/en-us/window
 Status information (状态信息) shows Wi-Fi and backend connection status, the network name, computer address, whether a pairing code is saved, and QQ support group 1104616387. Press OK to return to settings. Both provisioning screens show the support group as well.
 
 Connection settings (连接设置) occupies slot 6. Press OK on 重新配置 to enter provisioning.
-The same page lists up to three recently saved or selected connection profiles,
+The same page lists up to six recently saved or selected connection profiles,
 with the current one first. Each includes the SSID, password, computer endpoint and pairing
-credential. Saving the same SSID updates it; a fourth distinct SSID evicts the least recently
-used profile. UP/DOWN selects and OK saves another profile and restarts, interrupting voice.
+credential. Saving the same SSID updates it. A seventh distinct SSID evicts the least recently
+used profile. Tap UP or DOWN to move the highlight, then tap OK to select and restart, interrupting voice.
+Hold DOWN to delete the highlighted profile. Deleting the current profile restarts the device and
+tries the next one. Deleting the last profile returns to QR setup.
 During normal operation, selecting the current profile leaves it active. During provisioning,
 press OK on the QR screen, select the first saved profile, or choose 返回首页 to restart
 and reconnect with the saved network. First-time setup remains on the QR screen until a profile is saved.
-Existing single
-profiles remain readable and are imported on the first save or switch, preserving identity,
-backgrounds and the retained conversation.
+Older single-profile and three-profile records remain readable. The device writes the new format
+after a save, a switch to a different profile, or a deletion.
 
 Big Fat Fish holds a finger to her chin while thinking. Whale Girl, Claude, and ChatGPT cycle
 through expressions every 3.2 seconds. The bouncing dots indicate processing
@@ -240,7 +241,7 @@ for bounded firewall rules and diagnosis.
 
 Allow the listener through the computer firewall. On computers with multiple interfaces, choose an IP reachable from device Wi-Fi. A computer currently connected to the device setup hotspot must not mistake that temporary network for its regular LAN. The hotspot is for provisioning; DSH must keep running on the computer.
 
-Up to three sets of Wi-Fi credentials and pairing codes live in the unencrypted `dsh_voice` NVS namespace. The provisioning page never returns saved passwords or pairing codes. QR codes contain only the device's open setup hotspot or setup-page URL, without regular Wi-Fi passwords, pairing codes or device identity. Recordings are not stored on the device. DSH manages conversation persistence and tool approvals; see the root [plugin handbook](https://github.com/ppy-web/dsh-plugin-xiaomi-mimo-tts/blob/main/handbook.md).
+Up to six sets of Wi-Fi credentials and pairing codes live in the unencrypted `dsh_voice` NVS namespace. The provisioning page never returns saved passwords or pairing codes. QR codes contain only the device's open setup hotspot or setup-page URL, without regular Wi-Fi passwords, pairing codes or device identity. Recordings are not stored on the device. DSH manages conversation persistence and tool approvals; see the root [plugin handbook](https://github.com/ppy-web/dsh-plugin-xiaomi-mimo-tts/blob/main/handbook.md).
 
 ## Artifacts and hardware acceptance
 
